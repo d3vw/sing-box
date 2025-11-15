@@ -1,0 +1,88 @@
+name: Build Linux Only (Simple)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version name"
+        required: false
+        type: string
+        default: "dev"
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build Linux binaries
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch:
+          - amd64
+          - arm64
+          - arm/v7
+          - 386
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ^1.25.3
+
+      - name: Set version
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION=$(go run ./cmd/internal/read_tag@latest)
+          fi
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+
+      - name: Build
+        run: |
+          mkdir -p dist
+
+          # 设置架构变量
+          case "${{ matrix.arch }}" in
+            amd64)
+              GOARCH=amd64
+              ARCH_NAME=amd64
+              ;;
+            arm64)
+              GOARCH=arm64
+              ARCH_NAME=arm64
+              ;;
+            arm/v7)
+              GOARCH=arm
+              GOARM=7
+              ARCH_NAME=armv7
+              ;;
+            386)
+              GOARCH=386
+              ARCH_NAME=386
+              ;;
+          esac
+
+          # 编译
+          CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH} GOARM=${GOARM:-} \
+          go build -v -trimpath \
+            -tags "with_gvisor,with_quic,with_dhcp,with_wireguard,with_utls,with_acme,with_clash_api,with_tailscale,with_ccm" \
+            -ldflags "-s -w -X github.com/sagernet/sing-box/constant.Version=${VERSION}" \
+            -o dist/sing-box \
+            ./cmd/sing-box
+
+          # 打包
+          cd dist
+          tar -czvf sing-box-${VERSION}-linux-${ARCH_NAME}.tar.gz sing-box
+          rm sing-box
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sing-box-linux-${{ matrix.arch }}
+          path: dist/*.tar.gz
