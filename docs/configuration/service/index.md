@@ -26,6 +26,7 @@ icon: material/new-box
 | `ccm`      | [CCM](./ccm)           |
 | `derp`     | [DERP](./derp)         |
 | `ocm`      | [OCM](./ocm)           |
+| `quota`    | [Quota](./quota)       |
 | `resolved` | [Resolved](./resolved) |
 | `ssm-api`  | [SSM API](./ssm-api)   |
 

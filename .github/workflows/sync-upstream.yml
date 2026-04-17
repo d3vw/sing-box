@@ -1,0 +1,55 @@
+name: Sync Upstream
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 1'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    name: Merge upstream into custom
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout custom branch
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        with:
+          ref: custom
+          fetch-depth: 0
+
+      - name: Configure upstream remote
+        run: |
+          git remote add upstream https://github.com/SagerNet/sing-box.git
+          git fetch upstream dev-next
+
+      - name: Merge upstream changes
+        id: merge
+        run: |
+          set -euo pipefail
+          if git merge --no-edit upstream/dev-next; then
+            echo "result=merged" >> "$GITHUB_OUTPUT"
+          else
+            git merge --abort || true
+            echo "result=conflict" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push merged branch
+        if: steps.merge.outputs.result == 'merged'
+        run: git push origin custom
+
+      - name: Create conflict pull request
+        if: steps.merge.outputs.result == 'conflict'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: sync/upstream-dev-next
+          delete-branch: true
+          commit-message: "chore: sync upstream dev-next"
+          title: "chore: sync upstream dev-next"
+          body: |
+            Upstream sync hit merge conflicts while merging `upstream/dev-next` into `custom`.
+
+            Please resolve the conflicts manually and merge this PR.
+          base: custom
