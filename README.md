@@ -18,6 +18,14 @@ Recommended install flow:
 
 That keeps the setup simple and makes upgrades easier: you keep the same config and only swap the executable.
 
+If you want to install the custom binary from a release asset, use:
+
+```bash
+curl -L -o sing-box-linux-amd64.tar.gz https://github.com/d3vw/sing-box/releases/download/v1.13.0-custom.1/sing-box-linux-amd64.tar.gz
+tar -xzf sing-box-linux-amd64.tar.gz
+sudo install -m 755 sing-box-linux-amd64 /usr/local/bin/sing-box
+```
+
 ## Downloads
 
 - Custom Linux amd64 builds are published from the `custom` branch.
