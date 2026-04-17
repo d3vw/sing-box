@@ -1,29 +1,29 @@
-> Sponsored by [Warp](https://go.warp.dev/sing-box), built for coding with multiple AI agents
-
-<a href="https://go.warp.dev/sing-box">
-<img alt="Warp sponsorship" width="400" src="https://github.com/warpdotdev/brand-assets/raw/refs/heads/main/Github/Sponsor/Warp-Github-LG-02.png">
-</a>
-
----
-
 # sing-box
 
 The universal proxy platform.
 
 [![Packaging status](https://repology.org/badge/vertical-allrepos/sing-box.svg)](https://repology.org/project/sing-box/versions)
 
-## Documentation
+## Quick Start
 
-https://sing-box.sagernet.org
+This fork is intended to stay close to upstream while adding custom features.
 
-## Custom build
+Recommended install flow:
 
-If you use this fork, the easiest install method is:
-
-1. Install the upstream official sing-box release first.
+1. Install the official sing-box release first.
 2. Replace the upstream `sing-box` binary with the custom binary from this fork.
 
-This keeps the setup simple while you only swap the executable for your own build.
+That keeps the setup simple and makes upgrades easier: you keep the same config and only swap the executable.
+
+## Downloads
+
+- Custom Linux amd64 builds are published from the `custom` branch.
+- Release artifacts are attached to GitHub Releases.
+
+## Documentation
+
+- Upstream docs: https://sing-box.sagernet.org
+- For this fork, read the release notes and workflow outputs in the repository.
 
 ## License
 
