@@ -16,6 +16,15 @@ The universal proxy platform.
 
 https://sing-box.sagernet.org
 
+## Custom build
+
+If you use this fork, the easiest install method is:
+
+1. Install the upstream official sing-box release first.
+2. Replace the upstream `sing-box` binary with the custom binary from this fork.
+
+This keeps the setup simple while you only swap the executable for your own build.
+
 ## License
 
 ```
