@@ -32,7 +32,8 @@ jobs:
 
       - name: Build binary
         run: |
-          go build -mod=mod -o sing-box-linux-amd64 ./cmd/sing-box
+          TAGS=$(cat release/DEFAULT_BUILD_TAGS)
+          go build -mod=mod -tags "${TAGS}" -o sing-box-linux-amd64 ./cmd/sing-box
 
       - name: Package binary
         run: |
