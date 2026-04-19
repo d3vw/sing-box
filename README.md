@@ -34,6 +34,62 @@ If you already know the tag, replace `${TAG}` with the version you want.
 - Custom Linux amd64 builds are published from the `custom` branch.
 - Release artifacts are attached to GitHub Releases.
 
+## Custom Features
+
+### Inbound Quota (`quota` service)
+
+Tracks per-inbound traffic usage and blocks connections when a quota is exceeded.
+
+#### Server-side configuration
+
+```json
+{
+  "services": [
+    {
+      "type": "quota",
+      "tag": "quota",
+      "cache_path": "/var/lib/sing-box/quota.cache",
+      "inbounds": {
+        "my-inbound": {
+          "quota_bytes": "100GB"
+        }
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "quota-portal",
+      "tag": "quota-portal"
+    }
+  ],
+  "route": {
+    "rules": [
+      {
+        "ip_cidr": ["203.0.113.1/32"],
+        "outbound": "quota-portal"
+      }
+    ]
+  }
+}
+```
+
+- `cache_path` — persists traffic counters across restarts; omit to start fresh each time
+- `inbounds` — map of inbound tag to quota settings; `quota_bytes` accepts human-readable values like `100GB`, `1TB`
+- `quota-portal` outbound — intercepts TCP connections to the configured IP and returns an HTML page showing the quota status for the connecting inbound
+- `203.0.113.1` is a documentation-only reserved IP (RFC 5737) that will never be reached on the public internet; clients visiting it through the proxy will see the quota page
+
+When quota is exceeded, new connections from that inbound are rejected. Connections destined for the portal IP are always allowed through, so the quota page remains accessible even after the quota runs out.
+
+#### HTTP API
+
+If `listen` / `listen_port` are set on the service, a JSON API is available:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/quota/v1/inbounds` | List all inbounds with usage |
+| `GET` | `/quota/v1/inbounds/{tag}` | Get a single inbound |
+| `POST` | `/quota/v1/inbounds/{tag}/reset` | Reset counters for an inbound |
+
 ## Documentation
 
 - Upstream docs: https://sing-box.sagernet.org

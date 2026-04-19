@@ -15,6 +15,7 @@ import (
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
+	R "github.com/sagernet/sing-box/route/rule"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	N "github.com/sagernet/sing/common/network"
@@ -41,6 +42,8 @@ type Service struct {
 	cancel         context.CancelFunc
 	logger         log.ContextLogger
 	manager        *Manager
+	router         adapter.Router
+	outbound       adapter.OutboundManager
 	listener       *listener.Listener
 	tlsConfig      boxTLS.ServerConfig
 	httpServer     *http.Server
@@ -62,19 +65,26 @@ func NewService(ctx context.Context, logger log.ContextLogger, tag string, optio
 	if err != nil {
 		return nil, err
 	}
+	router := service.FromContext[adapter.Router](ctx)
+	if router == nil {
+		return nil, E.New("missing router")
+	}
+	outbound := service.FromContext[adapter.OutboundManager](ctx)
+	if outbound == nil {
+		return nil, E.New("missing outbound manager")
+	}
 	s := &Service{
 		Adapter:   boxService.NewAdapter(C.TypeQuota, tag),
 		ctx:       ctx,
 		cancel:    cancel,
 		logger:    logger,
 		manager:   manager,
+		router:    router,
+		outbound:  outbound,
 		cachePath: options.CachePath,
 	}
-	router := service.FromContext[adapter.Router](ctx)
-	if router == nil {
-		return nil, E.New("missing router")
-	}
 	router.AppendTracker(s)
+	_ = service.ContextWith(ctx, manager)
 	if options.Listen != nil || options.ListenPort != 0 {
 		chiRouter := chi.NewRouter()
 		NewAPIServer(logger, manager).Route(chiRouter)
@@ -164,11 +174,35 @@ func (s *Service) Close() error {
 	)
 }
 
+func (s *Service) isPortalDestination(metadata adapter.InboundContext) bool {
+	for _, r := range s.router.Rules() {
+		if !r.Match(&metadata) {
+			continue
+		}
+		action, ok := r.Action().(*R.RuleActionRoute)
+		if !ok {
+			break
+		}
+		ob, loaded := s.outbound.Outbound(action.Outbound)
+		if loaded && ob.Type() == C.TypeQuotaPortal {
+			return true
+		}
+		break
+	}
+	return false
+}
+
 func (s *Service) CheckConnection(ctx context.Context, metadata adapter.InboundContext) error {
+	if s.isPortalDestination(metadata) {
+		return nil
+	}
 	return s.manager.CheckConnection(ctx, metadata)
 }
 
 func (s *Service) CheckPacketConnection(ctx context.Context, metadata adapter.InboundContext) error {
+	if s.isPortalDestination(metadata) {
+		return nil
+	}
 	return s.manager.CheckPacketConnection(ctx, metadata)
 }
 

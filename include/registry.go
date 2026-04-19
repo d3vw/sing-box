@@ -79,6 +79,7 @@ func OutboundRegistry() *outbound.Registry {
 	direct.RegisterOutbound(registry)
 
 	block.RegisterOutbound(registry)
+	quota.RegisterPortalOutbound(registry)
 
 	group.RegisterSelector(registry)
 	group.RegisterURLTest(registry)
