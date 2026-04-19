@@ -32,7 +32,7 @@ jobs:
 
       - name: Build binary
         run: |
-          TAGS=$(cat release/DEFAULT_BUILD_TAGS | tr ',' '\n' | grep -v -E '^(badlinkname|tfogo_checklinkname0)$' | tr '\n' ',' | sed 's/,$//')
+          TAGS=$(cat release/DEFAULT_BUILD_TAGS | tr ',' '\n' | grep -v -E '^(badlinkname|tfogo_checklinkname0|with_naive_outbound)$' | tr '\n' ',' | sed 's/,$//')
           go build -mod=mod -tags "${TAGS}" -o sing-box-linux-amd64 ./cmd/sing-box
 
       - name: Package binary
