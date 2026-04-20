@@ -38,9 +38,6 @@ type InboundSnapshot struct {
 }
 
 func NewManager(inbounds map[string]option.QuotaInboundOptions) (*Manager, error) {
-	if len(inbounds) == 0 {
-		return nil, E.New("missing inbounds")
-	}
 	manager := &Manager{inbounds: make(map[string]*InboundState, len(inbounds))}
 	for tag, inboundOptions := range inbounds {
 		if tag == "" {
@@ -59,6 +56,18 @@ func NewManager(inbounds map[string]option.QuotaInboundOptions) (*Manager, error
 		}
 	}
 	return manager, nil
+}
+
+func (m *Manager) AddInbound(tag string, quotaBytes int64) {
+	m.access.Lock()
+	defer m.access.Unlock()
+	if _, exists := m.inbounds[tag]; exists {
+		return
+	}
+	m.inbounds[tag] = &InboundState{
+		Tag:        tag,
+		QuotaBytes: quotaBytes,
+	}
 }
 
 func (m *Manager) CheckConnection(ctx context.Context, metadata adapter.InboundContext) error {

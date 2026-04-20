@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/sagernet/sing/common/byteformats"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/json"
 	"github.com/sagernet/sing/common/json/badjson"
@@ -77,8 +78,9 @@ type ListenOptions struct {
 	TCPMultiPath         bool               `json:"tcp_multi_path,omitempty"`
 	UDPFragment          *bool              `json:"udp_fragment,omitempty"`
 	UDPFragmentDefault   bool               `json:"-"`
-	UDPTimeout           UDPTimeoutCompat   `json:"udp_timeout,omitempty"`
-	Detour               string             `json:"detour,omitempty"`
+	UDPTimeout           UDPTimeoutCompat         `json:"udp_timeout,omitempty"`
+	Detour               string                   `json:"detour,omitempty"`
+	QuotaBytes           *byteformats.MemoryBytes `json:"quota_bytes,omitempty"`
 
 	// Deprecated: removed
 	ProxyProtocol bool `json:"proxy_protocol,omitempty"`

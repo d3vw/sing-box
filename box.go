@@ -293,6 +293,15 @@ func New(options Options) (*Box, error) {
 		if err != nil {
 			return nil, E.Cause(err, "initialize inbound[", i, "]")
 		}
+		if listenWrapper, ok := inboundOptions.Options.(option.ListenOptionsWrapper); ok {
+			if qb := listenWrapper.TakeListenOptions().QuotaBytes; qb != nil {
+				if ib, found := inboundManager.Get(tag); found {
+					if qa, ok := ib.(interface{ SetQuotaBytes(int64) }); ok {
+						qa.SetQuotaBytes(int64(qb.Value()))
+					}
+				}
+			}
+		}
 	}
 	for i, serviceOptions := range options.Services {
 		var tag string

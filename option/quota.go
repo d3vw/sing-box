@@ -7,8 +7,9 @@ import (
 
 type QuotaServiceOptions struct {
 	ListenOptions
-	Inbounds      *badjson.TypedMap[string, QuotaInboundOptions] `json:"inbounds"`
-	CachePath     string                                         `json:"cache_path,omitempty"`
+	DefaultQuotaBytes *byteformats.MemoryBytes                       `json:"default_quota_bytes,omitempty"`
+	Inbounds          *badjson.TypedMap[string, QuotaInboundOptions]  `json:"inbounds"`
+	CachePath         string                                          `json:"cache_path,omitempty"`
 	InboundTLSOptionsContainer
 }
 

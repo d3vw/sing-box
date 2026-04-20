@@ -58,7 +58,11 @@ func NewService(ctx context.Context, logger log.ContextLogger, tag string, optio
 	inboundOptions := make(map[string]option.QuotaInboundOptions)
 	if options.Inbounds != nil {
 		for _, entry := range options.Inbounds.Entries() {
-			inboundOptions[entry.Key] = entry.Value
+			opts := entry.Value
+			if opts.QuotaBytes == nil && options.DefaultQuotaBytes != nil {
+				opts.QuotaBytes = options.DefaultQuotaBytes
+			}
+			inboundOptions[entry.Key] = opts
 		}
 	}
 	manager, err := NewManager(inboundOptions)
@@ -109,6 +113,17 @@ func NewService(ctx context.Context, logger log.ContextLogger, tag string, optio
 func (s *Service) Start(stage adapter.StartStage) error {
 	if stage != adapter.StartStateStart {
 		return nil
+	}
+	// Auto-discover inbounds with quota_bytes set
+	inboundManager := service.FromContext[adapter.InboundManager](s.ctx)
+	if inboundManager != nil {
+		for _, ib := range inboundManager.Inbounds() {
+			if qa, ok := ib.(interface{ QuotaBytes() int64 }); ok {
+				if quotaBytes := qa.QuotaBytes(); quotaBytes > 0 {
+					s.manager.AddInbound(ib.Tag(), quotaBytes)
+				}
+			}
+		}
 	}
 	if err := s.loadCache(); err != nil {
 		s.logger.Error(E.Cause(err, "load cache"))

@@ -42,18 +42,29 @@ Tracks per-inbound traffic usage and blocks connections when a quota is exceeded
 
 #### Server-side configuration
 
+Set `quota_bytes` directly on any inbound — the quota service discovers them automatically:
+
 ```json
 {
+  "inbounds": [
+    {
+      "type": "shadowsocks",
+      "tag": "alice",
+      "quota_bytes": "500GB",
+      "...": "..."
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "bob",
+      "quota_bytes": "200GB",
+      "...": "..."
+    }
+  ],
   "services": [
     {
       "type": "quota",
       "tag": "quota",
-      "cache_path": "/var/lib/sing-box/quota.cache",
-      "inbounds": {
-        "my-inbound": {
-          "quota_bytes": "100GB"
-        }
-      }
+      "cache_path": "/var/lib/sing-box/quota.cache"
     }
   ],
   "outbounds": [
@@ -73,8 +84,23 @@ Tracks per-inbound traffic usage and blocks connections when a quota is exceeded
 }
 ```
 
+You can also define quotas in the service itself (explicit map takes precedence, `default_quota_bytes` applies to entries without `quota_bytes`):
+
+```json
+{
+  "type": "quota",
+  "tag": "quota",
+  "default_quota_bytes": "200GB",
+  "cache_path": "/var/lib/sing-box/quota.cache",
+  "inbounds": {
+    "alice": { "quota_bytes": "500GB" },
+    "bob": {}
+  }
+}
+```
+
+- `quota_bytes` on inbound — human-readable values like `100GB`, `1TB`; the quota service picks these up at startup
 - `cache_path` — persists traffic counters across restarts; omit to start fresh each time
-- `inbounds` — map of inbound tag to quota settings; `quota_bytes` accepts human-readable values like `100GB`, `1TB`
 - `quota-portal` outbound — intercepts TCP connections to the configured IP and returns an HTML page showing the quota status for the connecting inbound
 - `203.0.113.1` is a documentation-only reserved IP (RFC 5737) that will never be reached on the public internet; clients visiting it through the proxy will see the quota page
 
