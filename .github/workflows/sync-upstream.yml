@@ -2,11 +2,18 @@ name: Sync Upstream
 
 on:
   workflow_dispatch:
+    inputs:
+      upstream_branch:
+        description: 'Upstream branch to merge into custom'
+        required: true
+        default: 'testing'
+        type: string
   schedule:
     - cron: '0 3 * * 1'
 
 permissions:
   contents: write
+  issues: write
   pull-requests: write
 
 jobs:
@@ -20,36 +27,97 @@ jobs:
           ref: custom
           fetch-depth: 0
 
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
       - name: Configure upstream remote
         run: |
+          set -euo pipefail
+          UPSTREAM_BRANCH="${{ github.event.inputs.upstream_branch || 'testing' }}"
           git remote add upstream https://github.com/SagerNet/sing-box.git
-          git fetch upstream dev-next
+          git fetch upstream "${UPSTREAM_BRANCH}"
+          echo "UPSTREAM_BRANCH=${UPSTREAM_BRANCH}" >> "$GITHUB_ENV"
 
       - name: Merge upstream changes
         id: merge
         run: |
           set -euo pipefail
-          if git merge --no-edit upstream/dev-next; then
+          if git merge --no-edit "upstream/${UPSTREAM_BRANCH}"; then
             echo "result=merged" >> "$GITHUB_OUTPUT"
           else
+            {
+              echo "result=conflict"
+              echo "conflict_files<<EOF"
+              git diff --name-only --diff-filter=U
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
             git merge --abort || true
-            echo "result=conflict" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Push merged branch
         if: steps.merge.outputs.result == 'merged'
         run: git push origin custom
 
-      - name: Create conflict pull request
+      - name: Open or update conflict issue
         if: steps.merge.outputs.result == 'conflict'
-        uses: peter-evans/create-pull-request@v7
+        uses: actions/github-script@v7
+        env:
+          UPSTREAM_BRANCH: ${{ env.UPSTREAM_BRANCH }}
+          CONFLICT_FILES: ${{ steps.merge.outputs.conflict_files }}
         with:
-          branch: sync/upstream-dev-next
-          delete-branch: true
-          commit-message: "chore: sync upstream dev-next"
-          title: "chore: sync upstream dev-next"
-          body: |
-            Upstream sync hit merge conflicts while merging `upstream/dev-next` into `custom`.
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const branch = process.env.UPSTREAM_BRANCH;
+            const conflictFiles = process.env.CONFLICT_FILES || '(unable to list conflict files)';
+            const title = `chore: sync upstream ${branch}`;
+            const body = [
+              `Scheduled upstream sync hit merge conflicts while merging \`upstream/${branch}\` into \`custom\`.`,
+              '',
+              'Please resolve the conflicts manually and keep the custom quota feature:',
+              '',
+              '- `quota` service',
+              '- `quota-portal` outbound',
+              '- inbound-level `quota_bytes`',
+              '- quota cache/API/docs',
+              '',
+              'Conflict files:',
+              '```text',
+              conflictFiles,
+              '```',
+              '',
+              'Suggested local workflow:',
+              '```bash',
+              'git checkout custom',
+              'git pull --ff-only origin custom',
+              `git fetch upstream ${branch}`,
+              `git checkout -b sync/${branch}-manual-$(date +%Y%m%d)`,
+              `git merge --no-ff upstream/${branch}`,
+              '# resolve conflicts, then run tests/build',
+              'git add .',
+              'git commit',
+              'git push origin HEAD',
+              '```',
+            ].join('\n');
 
-            Please resolve the conflicts manually and merge this PR.
-          base: custom
+            const query = `repo:${owner}/${repo} is:issue is:open in:title "${title}"`;
+            const search = await github.rest.search.issuesAndPullRequests({ q: query, per_page: 1 });
+            const existing = search.data.items.find(item => item.title === title && !item.pull_request);
+
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: existing.number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner,
+                repo,
+                title,
+                body,
+              });
+            }
