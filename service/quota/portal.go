@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"html"
 	"net"
 	"net/http"
 	"strings"
@@ -61,27 +62,68 @@ func (h *portalOutbound) serveHTTP(conn net.Conn, inboundTag string) {
 	if err != nil {
 		return
 	}
-	_ = req
-
-	var body string
-	if inboundTag == "" {
-		body = h.renderAll()
-	} else if snapshot, ok := h.manager.Snapshot(inboundTag); ok {
-		body = buildPage(inboundTag, renderSnapshot(snapshot))
-	} else {
-		body = h.renderAll()
+	isAdmin := inboundTag == "" || h.manager.state(inboundTag) == nil
+	if req.Method == http.MethodPost && req.URL.Path == "/quota/reset" {
+		h.handleReset(conn, req, isAdmin)
+		return
 	}
 
-	resp := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s",
-		len(body), body)
+	var body string
+	if isAdmin {
+		body = h.renderAll(true)
+	} else if snapshot, ok := h.manager.Snapshot(inboundTag); ok {
+		body = buildPage(inboundTag, renderSnapshot(snapshot, false))
+	} else {
+		body = h.renderAll(true)
+	}
+	h.writeHTML(conn, http.StatusOK, body, nil)
+}
+
+func (h *portalOutbound) handleReset(conn net.Conn, req *http.Request, isAdmin bool) {
+	if !isAdmin {
+		h.writeHTML(conn, http.StatusForbidden, buildPage("Forbidden", `<div class="card">Forbidden</div>`), nil)
+		return
+	}
+	if err := req.ParseForm(); err != nil {
+		h.writeHTML(conn, http.StatusBadRequest, buildPage("Bad request", `<div class="card">Bad request</div>`), nil)
+		return
+	}
+	tag := req.Form.Get("tag")
+	if tag == "" {
+		h.writeHTML(conn, http.StatusBadRequest, buildPage("Bad request", `<div class="card">Missing inbound tag</div>`), nil)
+		return
+	}
+	if !h.manager.Reset(tag) {
+		h.writeHTML(conn, http.StatusNotFound, buildPage("Not found", `<div class="card">Inbound not found</div>`), nil)
+		return
+	}
+	h.writeHTML(conn, http.StatusSeeOther, "", map[string]string{"Location": "/"})
+}
+
+func (h *portalOutbound) writeHTML(conn net.Conn, status int, body string, headers map[string]string) {
+	statusText := http.StatusText(status)
+	if statusText == "" {
+		statusText = "status"
+	}
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("HTTP/1.1 %d %s\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: %d\r\nConnection: close\r\n", status, statusText, len(body)))
+	for key, value := range headers {
+		sb.WriteString(key)
+		sb.WriteString(": ")
+		sb.WriteString(value)
+		sb.WriteString("\r\n")
+	}
+	sb.WriteString("\r\n")
+	sb.WriteString(body)
+	resp := sb.String()
 	conn.Write([]byte(resp))
 }
 
-func (h *portalOutbound) renderAll() string {
+func (h *portalOutbound) renderAll(admin bool) string {
 	snapshots := h.manager.Snapshots()
 	var sb strings.Builder
 	for _, s := range snapshots {
-		sb.WriteString(renderSnapshot(s))
+		sb.WriteString(renderSnapshot(s, admin))
 	}
 	if sb.Len() == 0 {
 		return buildPage("No quota data available.", "")
@@ -89,7 +131,7 @@ func (h *portalOutbound) renderAll() string {
 	return buildPage("Traffic Quota", sb.String())
 }
 
-func renderSnapshot(s InboundSnapshot) string {
+func renderSnapshot(s InboundSnapshot, admin bool) string {
 	usedPct := 0.0
 	if s.QuotaBytes > 0 {
 		usedPct = float64(s.UsedBytes) / float64(s.QuotaBytes) * 100
@@ -104,6 +146,13 @@ func renderSnapshot(s InboundSnapshot) string {
 		accentColor = "#ef4444"
 		badgeBg = "#3f1f1f"
 		badgeText = "BLOCKED"
+	}
+	resetControl := ""
+	if admin {
+		resetControl = fmt.Sprintf(`<form method="post" action="/quota/reset">
+    <input type="hidden" name="tag" value="%s">
+    <button type="submit" class="reset-button">Reset quota</button>
+  </form>`, html.EscapeString(s.Tag))
 	}
 	return fmt.Sprintf(`<div class="card">
   <div class="card-header">
@@ -131,8 +180,9 @@ func renderSnapshot(s InboundSnapshot) string {
       <div class="stat-value">%s</div>
     </div>
   </div>
+  %s
 </div>`,
-		s.Tag,
+		html.EscapeString(s.Tag),
 		badgeBg, accentColor, badgeText,
 		formatBytes(s.UsedBytes), formatBytes(s.QuotaBytes),
 		usedPct, accentColor,
@@ -140,6 +190,7 @@ func renderSnapshot(s InboundSnapshot) string {
 		formatBytes(s.RemainingBytes),
 		formatBytes(s.UplinkBytes),
 		formatBytes(s.DownlinkBytes),
+		resetControl,
 	)
 }
 
@@ -199,6 +250,8 @@ body{
 .stat-divider{width:1px;height:32px;background:#1e1e1e}
 .stat-label{font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#555;margin-bottom:4px}
 .stat-value{font-size:14px;font-weight:600;color:#d0d0d0}
+.reset-button{width:100%%;margin-top:18px;border:1px solid #2a2a2a;border-radius:10px;background:#1a1a1a;color:#e5e5e5;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:10px 12px;cursor:pointer}
+.reset-button:hover{background:#232323;border-color:#3a3a3a}
 </style>
 </head>
 <body>
