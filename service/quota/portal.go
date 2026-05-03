@@ -104,7 +104,11 @@ func (h *portalOutbound) serveHTTP(conn net.Conn, inboundTag string) {
 	if isAdmin {
 		body = h.renderAll(true)
 	} else if snapshot, ok := h.manager.Snapshot(inboundTag); ok {
-		body = buildPage(inboundTag, renderSnapshot(snapshot, false, h.memberOutboundConfigDirectory != ""))
+		var existing *shadowsocksOutboundForm
+		if h.memberOutboundConfigDirectory != "" {
+			existing = readMemberShadowsocksOutbound(h.memberOutboundConfigDirectory, inboundTag)
+		}
+		body = buildPage(inboundTag, renderSnapshot(snapshot, false, existing))
 	} else {
 		body = h.renderAll(true)
 	}
@@ -164,12 +168,12 @@ func (h *portalOutbound) handleSaveShadowsocksOutbound(conn net.Conn, req *http.
 	if !ok {
 		return
 	}
-	delay, err := h.writeMemberShadowsocksOutboundFragment(inboundTag, form.Server, form.ServerPort, form.Method, form.Password)
+	_, err := h.writeMemberShadowsocksOutboundFragment(inboundTag, form.Server, form.ServerPort, form.Method, form.Password)
 	if err != nil {
 		h.writeHTML(conn, http.StatusBadRequest, buildPage("Bad request", fmt.Sprintf(`<div class="card">Invalid Shadowsocks outbound: %s</div>`, html.EscapeString(err.Error()))), nil)
 		return
 	}
-	h.writeHTML(conn, http.StatusOK, buildPage("Saved", fmt.Sprintf(`<div class="card">Saved Shadowsocks outbound. Connection test passed: %d ms</div>`, delay)), nil)
+	h.writeHTML(conn, http.StatusSeeOther, "", map[string]string{"Location": "/"})
 }
 
 func (h *portalOutbound) handleTestShadowsocksOutbound(conn net.Conn, req *http.Request, inboundTag string, isAdmin bool) {
@@ -206,7 +210,7 @@ func (h *portalOutbound) handleDeleteMemberOutbound(conn net.Conn, inboundTag st
 		h.writeHTML(conn, http.StatusBadRequest, buildPage("Bad request", fmt.Sprintf(`<div class="card">Delete custom outbound failed: %s</div>`, html.EscapeString(err.Error()))), nil)
 		return
 	}
-	h.writeHTML(conn, http.StatusOK, buildPage("Deleted", `<div class="card">Removed custom outbound. Default route restored after reload.</div>`), nil)
+	h.writeHTML(conn, http.StatusSeeOther, "", map[string]string{"Location": "/"})
 }
 
 func (h *portalOutbound) writeMemberShadowsocksOutboundFragment(inboundTag, server string, serverPort int, method, password string) (uint16, error) {
@@ -361,6 +365,27 @@ func validateMemberOutboundFragmentCandidate(directory, fileName string, content
 	return nil
 }
 
+func readMemberShadowsocksOutbound(directory, inboundTag string) *shadowsocksOutboundForm {
+	path := filepath.Join(directory, memberOutboundFragmentName(inboundTag))
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var fragment struct {
+		Outbounds []struct {
+			Server     string `json:"server"`
+			ServerPort int    `json:"server_port"`
+			Method     string `json:"method"`
+			Password   string `json:"password"`
+		} `json:"outbounds"`
+	}
+	if err := json.Unmarshal(data, &fragment); err != nil || len(fragment.Outbounds) == 0 {
+		return nil
+	}
+	ob := fragment.Outbounds[0]
+	return &shadowsocksOutboundForm{Server: ob.Server, ServerPort: ob.ServerPort, Method: ob.Method, Password: ob.Password}
+}
+
 func (h *portalOutbound) deleteMemberOutboundFragment(inboundTag string) error {
 	checker := h.memberOutboundConfigChecker
 	if checker == nil {
@@ -472,7 +497,7 @@ func (h *portalOutbound) renderAll(admin bool) string {
 	snapshots := h.manager.Snapshots()
 	var sb strings.Builder
 	for _, s := range snapshots {
-		sb.WriteString(renderSnapshot(s, admin, false))
+		sb.WriteString(renderSnapshot(s, admin, nil))
 	}
 	if sb.Len() == 0 {
 		return buildPage("No quota data available.", "")
@@ -480,7 +505,7 @@ func (h *portalOutbound) renderAll(admin bool) string {
 	return buildPage("Traffic Quota", sb.String())
 }
 
-func renderSnapshot(s InboundSnapshot, admin bool, renderOutboundForm bool) string {
+func renderSnapshot(s InboundSnapshot, admin bool, existing *shadowsocksOutboundForm) string {
 	usedPct := 0.0
 	if s.QuotaBytes > 0 {
 		usedPct = float64(s.UsedBytes) / float64(s.QuotaBytes) * 100
@@ -504,8 +529,8 @@ func renderSnapshot(s InboundSnapshot, admin bool, renderOutboundForm bool) stri
   </form>`, html.EscapeString(s.Tag))
 	}
 	extraControls := resetControl
-	if renderOutboundForm {
-		extraControls += renderShadowsocksOutboundForm()
+	if existing != nil {
+		extraControls += renderShadowsocksOutboundForm(existing)
 	}
 	return fmt.Sprintf(`<div class="card">
   <div class="card-header">
@@ -547,30 +572,45 @@ func renderSnapshot(s InboundSnapshot, admin bool, renderOutboundForm bool) stri
 	)
 }
 
-func renderShadowsocksOutboundForm() string {
-	return `<div class="form-section">
+func renderShadowsocksOutboundForm(existing *shadowsocksOutboundForm) string {
+	server, port, method, password := "", "", "", ""
+	if existing != nil {
+		server = html.EscapeString(existing.Server)
+		if existing.ServerPort > 0 {
+			port = strconv.Itoa(existing.ServerPort)
+		}
+		method = html.EscapeString(existing.Method)
+		password = html.EscapeString(existing.Password)
+	}
+	deleteButton := ""
+	if existing != nil {
+		deleteButton = `<form method="post" action="/outbound/delete" style="margin-top:10px">
+      <button type="submit" class="action-button action-button-danger" style="width:100%%">Remove custom outbound</button>
+    </form>`
+	}
+	return fmt.Sprintf(`<div class="form-section">
     <div class="form-section-title">Custom Outbound</div>
     <form method="post" action="/outbound/shadowsocks">
       <div class="field-row">
         <div class="field field-grow">
           <label class="field-label">Server</label>
-          <input class="field-input" name="server" placeholder="example.com" autocomplete="off" required>
+          <input class="field-input" name="server" placeholder="example.com" autocomplete="off" value="%s" required>
         </div>
         <div class="field field-port">
           <label class="field-label">Port</label>
-          <input class="field-input" name="server_port" placeholder="443" inputmode="numeric" required>
+          <input class="field-input" name="server_port" placeholder="443" inputmode="numeric" value="%s" required>
         </div>
       </div>
       <div class="field-row">
         <div class="field field-grow">
           <label class="field-label">Method</label>
-          <input class="field-input" name="method" placeholder="aes-256-gcm" autocomplete="off" required>
+          <input class="field-input" name="method" placeholder="aes-256-gcm" autocomplete="off" value="%s" required>
         </div>
       </div>
       <div class="field-row">
         <div class="field field-grow">
           <label class="field-label">Password</label>
-          <input class="field-input" name="password" placeholder="••••••••" type="password" required>
+          <input class="field-input" name="password" placeholder="••••••••" type="password" value="%s" required>
         </div>
       </div>
       <div class="form-actions">
@@ -578,10 +618,8 @@ func renderShadowsocksOutboundForm() string {
         <button type="submit" class="action-button action-button-primary">Save</button>
       </div>
     </form>
-    <form method="post" action="/outbound/delete" style="margin-top:10px">
-      <button type="submit" class="action-button action-button-danger" style="width:100%%">Remove custom outbound</button>
-    </form>
-  </div>`
+    %s
+  </div>`, server, port, method, password, deleteButton)
 }
 
 func buildPage(title, content string) string {
