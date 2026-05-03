@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"io"
 	"net"
 	"os"
 	"strings"
@@ -320,7 +321,11 @@ func (c *STDServerConfig) certificateUpdated(path string) error {
 }
 
 func (c *STDServerConfig) Close() error {
-	return common.Close(c.certificateProvider, c.acmeService, c.watcher)
+	var watcher io.Closer
+	if c.watcher != nil {
+		watcher = c.watcher
+	}
+	return common.Close(c.certificateProvider, c.acmeService, watcher)
 }
 
 func NewSTDServer(ctx context.Context, logger log.ContextLogger, options option.InboundTLSOptions) (ServerConfig, error) {
