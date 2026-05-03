@@ -174,8 +174,11 @@ func (h *portalOutbound) handleSaveShadowsocksOutbound(conn net.Conn, req *http.
 		h.writeHTML(conn, http.StatusBadRequest, buildPage("Bad request", fmt.Sprintf(`<div class="card">Invalid Shadowsocks outbound: %s</div>`, html.EscapeString(err.Error()))), nil)
 		return
 	}
-	_ = syscall.Kill(os.Getpid(), syscall.SIGHUP)
 	h.writeHTML(conn, http.StatusSeeOther, "", map[string]string{"Location": "/"})
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		_ = syscall.Kill(os.Getpid(), syscall.SIGHUP)
+	}()
 }
 
 func (h *portalOutbound) handleTestShadowsocksOutbound(conn net.Conn, req *http.Request, inboundTag string, isAdmin bool) {
@@ -222,8 +225,11 @@ func (h *portalOutbound) handleDeleteMemberOutbound(conn net.Conn, inboundTag st
 		h.writeHTML(conn, http.StatusBadRequest, buildPage("Bad request", fmt.Sprintf(`<div class="card">Delete custom outbound failed: %s</div>`, html.EscapeString(err.Error()))), nil)
 		return
 	}
-	_ = syscall.Kill(os.Getpid(), syscall.SIGHUP)
 	h.writeHTML(conn, http.StatusSeeOther, "", map[string]string{"Location": "/"})
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		_ = syscall.Kill(os.Getpid(), syscall.SIGHUP)
+	}()
 }
 
 func (h *portalOutbound) writeMemberShadowsocksOutboundFragment(inboundTag, server string, serverPort int, method, password string) (uint16, error) {
