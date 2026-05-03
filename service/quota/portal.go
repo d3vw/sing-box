@@ -3,17 +3,25 @@ package quota
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"html"
 	"net"
 	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sagernet/sing-box/adapter"
 	boxOutbound "github.com/sagernet/sing-box/adapter/outbound"
+	"github.com/sagernet/sing-box/common/urltest"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
+	ssoutbound "github.com/sagernet/sing-box/protocol/shadowsocks"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/service"
@@ -23,21 +31,33 @@ func RegisterPortalOutbound(registry *boxOutbound.Registry) {
 	boxOutbound.Register[option.QuotaPortalOutboundOptions](registry, C.TypeQuotaPortal, newPortalOutbound)
 }
 
+type memberOutboundConnectivityTester func(ctx context.Context, inboundTag, server string, serverPort int, method, password string) (uint16, error)
+
 type portalOutbound struct {
 	boxOutbound.Adapter
-	logger  log.ContextLogger
-	manager *Manager
+	ctx                              context.Context
+	router                           adapter.Router
+	logger                           log.ContextLogger
+	manager                          *Manager
+	memberOutboundConfigDirectory    string
+	memberOutboundConfigChecker      func(directory string) error
+	memberOutboundConnectivityTester memberOutboundConnectivityTester
 }
 
-func newPortalOutbound(ctx context.Context, _ adapter.Router, logger log.ContextLogger, tag string, _ option.QuotaPortalOutboundOptions) (adapter.Outbound, error) {
+func newPortalOutbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.QuotaPortalOutboundOptions) (adapter.Outbound, error) {
 	manager := service.FromContext[*Manager](ctx)
 	if manager == nil {
 		return nil, fmt.Errorf("quota-portal outbound requires a quota service to be configured")
 	}
 	return &portalOutbound{
-		Adapter: boxOutbound.NewAdapter(C.TypeQuotaPortal, tag, []string{N.NetworkTCP}, nil),
-		logger:  logger,
-		manager: manager,
+		Adapter:                          boxOutbound.NewAdapter(C.TypeQuotaPortal, tag, []string{N.NetworkTCP}, nil),
+		ctx:                              ctx,
+		router:                           router,
+		logger:                           logger,
+		manager:                          manager,
+		memberOutboundConfigDirectory:    options.MemberOutboundConfigDirectory,
+		memberOutboundConfigChecker:      runSingBoxConfigCheck,
+		memberOutboundConnectivityTester: nil,
 	}, nil
 }
 
@@ -67,12 +87,24 @@ func (h *portalOutbound) serveHTTP(conn net.Conn, inboundTag string) {
 		h.handleReset(conn, req, isAdmin)
 		return
 	}
+	if req.Method == http.MethodPost && req.URL.Path == "/outbound/shadowsocks" {
+		h.handleSaveShadowsocksOutbound(conn, req, inboundTag, isAdmin)
+		return
+	}
+	if req.Method == http.MethodPost && req.URL.Path == "/outbound/shadowsocks/test" {
+		h.handleTestShadowsocksOutbound(conn, req, inboundTag, isAdmin)
+		return
+	}
+	if req.Method == http.MethodPost && req.URL.Path == "/outbound/delete" {
+		h.handleDeleteMemberOutbound(conn, inboundTag, isAdmin)
+		return
+	}
 
 	var body string
 	if isAdmin {
 		body = h.renderAll(true)
 	} else if snapshot, ok := h.manager.Snapshot(inboundTag); ok {
-		body = buildPage(inboundTag, renderSnapshot(snapshot, false))
+		body = buildPage(inboundTag, renderSnapshot(snapshot, false, h.memberOutboundConfigDirectory != ""))
 	} else {
 		body = h.renderAll(true)
 	}
@@ -100,6 +132,323 @@ func (h *portalOutbound) handleReset(conn net.Conn, req *http.Request, isAdmin b
 	h.writeHTML(conn, http.StatusSeeOther, "", map[string]string{"Location": "/"})
 }
 
+type shadowsocksOutboundForm struct {
+	Server     string
+	ServerPort int
+	Method     string
+	Password   string
+}
+
+func (h *portalOutbound) parseShadowsocksOutboundForm(conn net.Conn, req *http.Request) (shadowsocksOutboundForm, bool) {
+	if err := req.ParseForm(); err != nil {
+		h.writeHTML(conn, http.StatusBadRequest, buildPage("Bad request", `<div class="card">Bad request</div>`), nil)
+		return shadowsocksOutboundForm{}, false
+	}
+	server := strings.TrimSpace(req.Form.Get("server"))
+	method := strings.TrimSpace(req.Form.Get("method"))
+	password := req.Form.Get("password")
+	port, err := strconv.Atoi(strings.TrimSpace(req.Form.Get("server_port")))
+	if err != nil || server == "" || method == "" || password == "" || port < 1 || port > 65535 {
+		h.writeHTML(conn, http.StatusBadRequest, buildPage("Bad request", `<div class="card">Invalid Shadowsocks outbound</div>`), nil)
+		return shadowsocksOutboundForm{}, false
+	}
+	return shadowsocksOutboundForm{Server: server, ServerPort: port, Method: method, Password: password}, true
+}
+
+func (h *portalOutbound) handleSaveShadowsocksOutbound(conn net.Conn, req *http.Request, inboundTag string, isAdmin bool) {
+	if isAdmin || h.memberOutboundConfigDirectory == "" || h.manager.state(inboundTag) == nil {
+		h.writeHTML(conn, http.StatusForbidden, buildPage("Forbidden", `<div class="card">Forbidden</div>`), nil)
+		return
+	}
+	form, ok := h.parseShadowsocksOutboundForm(conn, req)
+	if !ok {
+		return
+	}
+	delay, err := h.writeMemberShadowsocksOutboundFragment(inboundTag, form.Server, form.ServerPort, form.Method, form.Password)
+	if err != nil {
+		h.writeHTML(conn, http.StatusBadRequest, buildPage("Bad request", fmt.Sprintf(`<div class="card">Invalid Shadowsocks outbound: %s</div>`, html.EscapeString(err.Error()))), nil)
+		return
+	}
+	h.writeHTML(conn, http.StatusOK, buildPage("Saved", fmt.Sprintf(`<div class="card">Saved Shadowsocks outbound. Connection test passed: %d ms</div>`, delay)), nil)
+}
+
+func (h *portalOutbound) handleTestShadowsocksOutbound(conn net.Conn, req *http.Request, inboundTag string, isAdmin bool) {
+	if isAdmin || h.memberOutboundConfigDirectory == "" || h.manager.state(inboundTag) == nil {
+		h.writeHTML(conn, http.StatusForbidden, buildPage("Forbidden", `<div class="card">Forbidden</div>`), nil)
+		return
+	}
+	form, ok := h.parseShadowsocksOutboundForm(conn, req)
+	if !ok {
+		return
+	}
+	checker := h.memberOutboundConfigChecker
+	if checker == nil {
+		checker = runSingBoxConfigCheck
+	}
+	if err := checkMemberShadowsocksOutboundFragment(h.memberOutboundConfigDirectory, inboundTag, form.Server, form.ServerPort, form.Method, form.Password, checker); err != nil {
+		h.writeHTML(conn, http.StatusBadRequest, buildPage("Bad request", fmt.Sprintf(`<div class="card">Invalid Shadowsocks outbound: %s</div>`, html.EscapeString(err.Error()))), nil)
+		return
+	}
+	delay, err := h.testMemberShadowsocksOutbound(inboundTag, form.Server, form.ServerPort, form.Method, form.Password)
+	if err != nil {
+		h.writeHTML(conn, http.StatusBadRequest, buildPage("Bad request", fmt.Sprintf(`<div class="card">Connection test failed: %s</div>`, html.EscapeString(err.Error()))), nil)
+		return
+	}
+	h.writeHTML(conn, http.StatusOK, buildPage("Connection test", fmt.Sprintf(`<div class="card">Connection test passed: %d ms</div>`, delay)), nil)
+}
+
+func (h *portalOutbound) handleDeleteMemberOutbound(conn net.Conn, inboundTag string, isAdmin bool) {
+	if isAdmin || h.memberOutboundConfigDirectory == "" || h.manager.state(inboundTag) == nil {
+		h.writeHTML(conn, http.StatusForbidden, buildPage("Forbidden", `<div class="card">Forbidden</div>`), nil)
+		return
+	}
+	if err := h.deleteMemberOutboundFragment(inboundTag); err != nil {
+		h.writeHTML(conn, http.StatusBadRequest, buildPage("Bad request", fmt.Sprintf(`<div class="card">Delete custom outbound failed: %s</div>`, html.EscapeString(err.Error()))), nil)
+		return
+	}
+	h.writeHTML(conn, http.StatusOK, buildPage("Deleted", `<div class="card">Removed custom outbound. Default route restored after reload.</div>`), nil)
+}
+
+func (h *portalOutbound) writeMemberShadowsocksOutboundFragment(inboundTag, server string, serverPort int, method, password string) (uint16, error) {
+	checker := h.memberOutboundConfigChecker
+	if checker == nil {
+		checker = runSingBoxConfigCheck
+	}
+	var delay uint16
+	err := writeMemberShadowsocksOutboundFragment(h.memberOutboundConfigDirectory, inboundTag, server, serverPort, method, password, checker, func() error {
+		var err error
+		delay, err = h.testMemberShadowsocksOutbound(inboundTag, server, serverPort, method, password)
+		return err
+	})
+	return delay, err
+}
+
+func (h *portalOutbound) testMemberShadowsocksOutbound(inboundTag, server string, serverPort int, method, password string) (uint16, error) {
+	tester := h.memberOutboundConnectivityTester
+	if tester == nil {
+		tester = h.testShadowsocksOutboundConnectivity
+	}
+	ctx := h.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return tester(ctx, inboundTag, server, serverPort, method, password)
+}
+
+func checkMemberShadowsocksOutboundFragment(directory, inboundTag, server string, serverPort int, method, password string, checker func(directory string) error) error {
+	content, err := buildMemberShadowsocksOutboundFragment(inboundTag, server, serverPort, method, password)
+	if err != nil {
+		return err
+	}
+	return validateMemberOutboundFragmentCandidate(directory, memberOutboundFragmentName(inboundTag), content, checker, nil)
+}
+
+func writeMemberShadowsocksOutboundFragment(directory, inboundTag, server string, serverPort int, method, password string, checker func(directory string) error, preCommit func() error) error {
+	content, err := buildMemberShadowsocksOutboundFragment(inboundTag, server, serverPort, method, password)
+	if err != nil {
+		return err
+	}
+	return validateAndWriteMemberOutboundFragment(directory, memberOutboundFragmentName(inboundTag), content, checker, preCommit)
+}
+
+func buildMemberShadowsocksOutboundFragment(inboundTag, server string, serverPort int, method, password string) ([]byte, error) {
+	outboundTag := memberOutboundTag(inboundTag)
+	fragment := struct {
+		Outbounds []struct {
+			Type       string `json:"type"`
+			Tag        string `json:"tag"`
+			Server     string `json:"server"`
+			ServerPort int    `json:"server_port"`
+			Method     string `json:"method"`
+			Password   string `json:"password"`
+		} `json:"outbounds"`
+		Route struct {
+			Rules []struct {
+				Inbound  []string `json:"inbound"`
+				Outbound string   `json:"outbound"`
+			} `json:"rules"`
+		} `json:"route"`
+	}{}
+	fragment.Outbounds = append(fragment.Outbounds, struct {
+		Type       string `json:"type"`
+		Tag        string `json:"tag"`
+		Server     string `json:"server"`
+		ServerPort int    `json:"server_port"`
+		Method     string `json:"method"`
+		Password   string `json:"password"`
+	}{
+		Type:       C.TypeShadowsocks,
+		Tag:        outboundTag,
+		Server:     server,
+		ServerPort: serverPort,
+		Method:     method,
+		Password:   password,
+	})
+	fragment.Route.Rules = append(fragment.Route.Rules, struct {
+		Inbound  []string `json:"inbound"`
+		Outbound string   `json:"outbound"`
+	}{
+		Inbound:  []string{inboundTag},
+		Outbound: outboundTag,
+	})
+	content, err := json.MarshalIndent(fragment, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	content = append(content, '\n')
+	return content, nil
+}
+
+func (h *portalOutbound) testShadowsocksOutboundConnectivity(ctx context.Context, inboundTag, server string, serverPort int, method, password string) (uint16, error) {
+	testCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	outbound, err := ssoutbound.NewOutbound(testCtx, h.router, h.logger, memberOutboundTag(inboundTag), option.ShadowsocksOutboundOptions{
+		ServerOptions: option.ServerOptions{
+			Server:     server,
+			ServerPort: uint16(serverPort),
+		},
+		Method:   method,
+		Password: password,
+	})
+	if err != nil {
+		return 0, err
+	}
+	if closer, ok := outbound.(interface{ Close() error }); ok {
+		defer closer.Close()
+	}
+	return urltest.URLTest(testCtx, "", outbound)
+}
+
+func validateAndWriteMemberOutboundFragment(directory, fileName string, content []byte, checker func(directory string) error, preCommit func() error) error {
+	if err := validateMemberOutboundFragmentCandidate(directory, fileName, content, checker, preCommit); err != nil {
+		return err
+	}
+	finalPath := filepath.Join(directory, fileName)
+	tempPath := finalPath + ".tmp"
+	if err := os.WriteFile(tempPath, content, 0o600); err != nil {
+		return err
+	}
+	if err := os.Rename(tempPath, finalPath); err != nil {
+		_ = os.Remove(tempPath)
+		return err
+	}
+	return nil
+}
+
+func validateMemberOutboundFragmentCandidate(directory, fileName string, content []byte, checker func(directory string) error, preCommit func() error) error {
+	if err := os.MkdirAll(directory, 0o755); err != nil {
+		return err
+	}
+	validationDir, err := os.MkdirTemp(filepath.Dir(directory), ".quota-check-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(validationDir)
+	if err := copyJSONConfigDirectory(directory, validationDir, fileName); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(validationDir, fileName), content, 0o600); err != nil {
+		return err
+	}
+	if err := checker(validationDir); err != nil {
+		return err
+	}
+	if preCommit != nil {
+		if err := preCommit(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (h *portalOutbound) deleteMemberOutboundFragment(inboundTag string) error {
+	checker := h.memberOutboundConfigChecker
+	if checker == nil {
+		checker = runSingBoxConfigCheck
+	}
+	return deleteMemberOutboundFragment(h.memberOutboundConfigDirectory, memberOutboundFragmentName(inboundTag), checker)
+}
+
+func deleteMemberOutboundFragment(directory, fileName string, checker func(directory string) error) error {
+	if err := os.MkdirAll(directory, 0o755); err != nil {
+		return err
+	}
+	validationDir, err := os.MkdirTemp(filepath.Dir(directory), ".quota-check-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(validationDir)
+	if err := copyJSONConfigDirectory(directory, validationDir, fileName); err != nil {
+		return err
+	}
+	if err := checker(validationDir); err != nil {
+		return err
+	}
+	finalPath := filepath.Join(directory, fileName)
+	if err := os.Remove(finalPath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+func copyJSONConfigDirectory(sourceDir, destinationDir, replacementFileName string) error {
+	entries, err := os.ReadDir(sourceDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") || entry.Name() == replacementFileName {
+			continue
+		}
+		content, err := os.ReadFile(filepath.Join(sourceDir, entry.Name()))
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(destinationDir, entry.Name()), content, 0o600); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func runSingBoxConfigCheck(directory string) error {
+	executable, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	output, err := exec.Command(executable, "check", "-C", directory).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("sing-box check failed: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+func memberOutboundFragmentName(inboundTag string) string {
+	return "40-quota-member-" + safeConfigName(inboundTag) + ".json"
+}
+
+func memberOutboundTag(inboundTag string) string {
+	return "quota-" + safeConfigName(inboundTag) + "-custom-out"
+}
+
+func safeConfigName(value string) string {
+	var sb strings.Builder
+	for _, r := range value {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.' {
+			sb.WriteRune(r)
+		} else {
+			sb.WriteByte('-')
+		}
+	}
+	if sb.Len() == 0 {
+		return "member"
+	}
+	return sb.String()
+}
+
 func (h *portalOutbound) writeHTML(conn net.Conn, status int, body string, headers map[string]string) {
 	statusText := http.StatusText(status)
 	if statusText == "" {
@@ -123,7 +472,7 @@ func (h *portalOutbound) renderAll(admin bool) string {
 	snapshots := h.manager.Snapshots()
 	var sb strings.Builder
 	for _, s := range snapshots {
-		sb.WriteString(renderSnapshot(s, admin))
+		sb.WriteString(renderSnapshot(s, admin, false))
 	}
 	if sb.Len() == 0 {
 		return buildPage("No quota data available.", "")
@@ -131,7 +480,7 @@ func (h *portalOutbound) renderAll(admin bool) string {
 	return buildPage("Traffic Quota", sb.String())
 }
 
-func renderSnapshot(s InboundSnapshot, admin bool) string {
+func renderSnapshot(s InboundSnapshot, admin bool, renderOutboundForm bool) string {
 	usedPct := 0.0
 	if s.QuotaBytes > 0 {
 		usedPct = float64(s.UsedBytes) / float64(s.QuotaBytes) * 100
@@ -153,6 +502,10 @@ func renderSnapshot(s InboundSnapshot, admin bool) string {
     <input type="hidden" name="tag" value="%s">
     <button type="submit" class="reset-button">Reset quota</button>
   </form>`, html.EscapeString(s.Tag))
+	}
+	extraControls := resetControl
+	if renderOutboundForm {
+		extraControls += renderShadowsocksOutboundForm()
 	}
 	return fmt.Sprintf(`<div class="card">
   <div class="card-header">
@@ -190,8 +543,23 @@ func renderSnapshot(s InboundSnapshot, admin bool) string {
 		formatBytes(s.RemainingBytes),
 		formatBytes(s.UplinkBytes),
 		formatBytes(s.DownlinkBytes),
-		resetControl,
+		extraControls,
 	)
+}
+
+func renderShadowsocksOutboundForm() string {
+	return `<form method="post" action="/outbound/shadowsocks">
+    <div class="form-title">Custom Shadowsocks outbound</div>
+    <input name="server" placeholder="Server" autocomplete="off" required>
+    <input name="server_port" placeholder="Port" inputmode="numeric" required>
+    <input name="method" placeholder="Method" autocomplete="off" required>
+    <input name="password" placeholder="Password" type="password" required>
+    <button type="submit" class="reset-button">Save Shadowsocks outbound</button>
+    <button type="submit" class="reset-button" formaction="/outbound/shadowsocks/test">Test connection</button>
+  </form>
+  <form method="post" action="/outbound/delete">
+    <button type="submit" class="reset-button">Remove custom outbound</button>
+  </form>`
 }
 
 func buildPage(title, content string) string {
