@@ -105,11 +105,16 @@ func (h *portalOutbound) serveHTTP(conn net.Conn, inboundTag string) {
 	if isAdmin {
 		body = h.renderAll(true)
 	} else if snapshot, ok := h.manager.Snapshot(inboundTag); ok {
-		var existing *shadowsocksOutboundForm
+		var formData *shadowsocksOutboundForm
 		if h.memberOutboundConfigDirectory != "" {
-			existing = readMemberShadowsocksOutbound(h.memberOutboundConfigDirectory, inboundTag)
+			existing := readMemberShadowsocksOutbound(h.memberOutboundConfigDirectory, inboundTag)
+			if existing != nil {
+				formData = existing
+			} else {
+				formData = &shadowsocksOutboundForm{}
+			}
 		}
-		body = buildPage(inboundTag, renderSnapshot(snapshot, false, existing))
+		body = buildPage(inboundTag, renderSnapshot(snapshot, false, formData))
 	} else {
 		body = h.renderAll(true)
 	}
@@ -142,6 +147,7 @@ type shadowsocksOutboundForm struct {
 	ServerPort int
 	Method     string
 	Password   string
+	Saved      bool
 }
 
 func (h *portalOutbound) parseShadowsocksOutboundForm(conn net.Conn, req *http.Request) (shadowsocksOutboundForm, bool) {
@@ -404,7 +410,7 @@ func readMemberShadowsocksOutbound(directory, inboundTag string) *shadowsocksOut
 		return nil
 	}
 	ob := fragment.Outbounds[0]
-	return &shadowsocksOutboundForm{Server: ob.Server, ServerPort: ob.ServerPort, Method: ob.Method, Password: ob.Password}
+	return &shadowsocksOutboundForm{Server: ob.Server, ServerPort: ob.ServerPort, Method: ob.Method, Password: ob.Password, Saved: true}
 }
 
 func (h *portalOutbound) deleteMemberOutboundFragment(inboundTag string) error {
@@ -614,7 +620,7 @@ func renderShadowsocksOutboundForm(existing *shadowsocksOutboundForm) string {
 		password = html.EscapeString(existing.Password)
 	}
 	deleteButton := ""
-	if existing != nil {
+	if existing != nil && existing.Saved {
 		deleteButton = `<form method="post" action="/outbound/delete" style="display:inline">
       <button type="submit" class="delete-outbound-button">Remove</button>
     </form>`
