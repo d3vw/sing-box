@@ -489,7 +489,7 @@ func runSingBoxConfigCheck(directory string) error {
 }
 
 func memberOutboundFragmentName(inboundTag string) string {
-	return "40-quota-member-" + safeConfigName(inboundTag) + ".json"
+	return "zz-quota-member-" + safeConfigName(inboundTag) + ".json"
 }
 
 func memberOutboundTag(inboundTag string) string {
