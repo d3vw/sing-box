@@ -177,8 +177,13 @@ func (h *portalOutbound) handleSaveShadowsocksOutbound(conn net.Conn, req *http.
 }
 
 func (h *portalOutbound) handleTestShadowsocksOutbound(conn net.Conn, req *http.Request, inboundTag string, isAdmin bool) {
+	writeJSON := func(status int, body string) {
+		resp := fmt.Sprintf("HTTP/1.1 %d %s\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s",
+			status, http.StatusText(status), len(body), body)
+		conn.Write([]byte(resp))
+	}
 	if isAdmin || h.memberOutboundConfigDirectory == "" || h.manager.state(inboundTag) == nil {
-		h.writeHTML(conn, http.StatusForbidden, buildPage("Forbidden", `<div class="card">Forbidden</div>`), nil)
+		writeJSON(http.StatusForbidden, `{"error":"forbidden"}`)
 		return
 	}
 	form, ok := h.parseShadowsocksOutboundForm(conn, req)
@@ -190,15 +195,20 @@ func (h *portalOutbound) handleTestShadowsocksOutbound(conn net.Conn, req *http.
 		checker = runSingBoxConfigCheck
 	}
 	if err := checkMemberShadowsocksOutboundFragment(h.memberOutboundConfigDirectory, inboundTag, form.Server, form.ServerPort, form.Method, form.Password, checker); err != nil {
-		h.writeHTML(conn, http.StatusBadRequest, buildPage("Bad request", fmt.Sprintf(`<div class="card">Invalid Shadowsocks outbound: %s</div>`, html.EscapeString(err.Error()))), nil)
+		writeJSON(http.StatusBadRequest, fmt.Sprintf(`{"error":%s}`, jsonString(err.Error())))
 		return
 	}
 	delay, err := h.testMemberShadowsocksOutbound(inboundTag, form.Server, form.ServerPort, form.Method, form.Password)
 	if err != nil {
-		h.writeHTML(conn, http.StatusBadRequest, buildPage("Bad request", fmt.Sprintf(`<div class="card">Connection test failed: %s</div>`, html.EscapeString(err.Error()))), nil)
+		writeJSON(http.StatusBadRequest, fmt.Sprintf(`{"error":%s}`, jsonString(err.Error())))
 		return
 	}
-	h.writeHTML(conn, http.StatusOK, buildPage("Connection test", fmt.Sprintf(`<div class="card">Connection test passed: %d ms</div>`, delay)), nil)
+	writeJSON(http.StatusOK, fmt.Sprintf(`{"delay":%d}`, delay))
+}
+
+func jsonString(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
 }
 
 func (h *portalOutbound) handleDeleteMemberOutbound(conn net.Conn, inboundTag string, isAdmin bool) {
@@ -614,12 +624,33 @@ func renderShadowsocksOutboundForm(existing *shadowsocksOutboundForm) string {
         </div>
       </div>
       <div class="form-actions">
-        <button type="submit" formaction="/outbound/shadowsocks/test" class="action-button action-button-secondary">Test</button>
+        <button type="button" onclick="testOutbound(this)" class="action-button action-button-secondary">Test</button>
         <button type="submit" class="action-button action-button-primary">Save</button>
       </div>
+      <div id="test-result" class="test-result" style="display:none"></div>
     </form>
     %s
-  </div>`, server, port, method, password, deleteButton)
+  </div>
+<script>
+function testOutbound(btn){
+  var form=btn.closest('form');
+  var data=new FormData(form);
+  var params=new URLSearchParams(data);
+  btn.disabled=true;
+  btn.textContent='Testing…';
+  var r=document.getElementById('test-result');
+  r.className='test-result';r.style.display='none';
+  fetch('/outbound/shadowsocks/test',{method:'POST',body:params,headers:{'Content-Type':'application/x-www-form-urlencoded'}})
+    .then(function(res){return res.json().then(function(j){return{ok:res.ok,j:j}})})
+    .then(function(d){
+      r.style.display='block';
+      if(d.ok&&d.j.delay!=null){r.className='test-result test-ok';r.textContent=d.j.delay+' ms';}
+      else{r.className='test-result test-err';r.textContent=d.j.error||'Unknown error';}
+    })
+    .catch(function(e){r.style.display='block';r.className='test-result test-err';r.textContent='Request failed';})
+    .finally(function(){btn.disabled=false;btn.textContent='Test';});
+}
+</script>`, server, port, method, password, deleteButton)
 }
 
 func buildPage(title, content string) string {
@@ -698,6 +729,9 @@ body{
 .action-button-secondary:hover{background:#232323;border-color:#3a3a3a}
 .action-button-danger{background:#1a1a1a;border-color:#3f1f1f;color:#ef4444;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:10px 12px;cursor:pointer;border-radius:10px}
 .action-button-danger:hover{background:#2a1010;border-color:#5a2a2a}
+.test-result{margin-top:10px;padding:8px 12px;border-radius:8px;font-size:12px;font-weight:600;letter-spacing:.04em}
+.test-ok{background:#0f2a1a;border:1px solid #1a4a2a;color:#4ade80}
+.test-err{background:#2a0f0f;border:1px solid #4a1a1a;color:#f87171}
 </style>
 </head>
 <body>
