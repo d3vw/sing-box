@@ -18,5 +18,6 @@ type QuotaInboundOptions struct {
 }
 
 type QuotaPortalOutboundOptions struct {
-	MemberOutboundConfigDirectory string `json:"member_outbound_config_directory,omitempty"`
+	MemberOutboundConfigDirectory string   `json:"member_outbound_config_directory,omitempty"`
+	PortalAddresses               []string `json:"portal_addresses,omitempty"`
 }
