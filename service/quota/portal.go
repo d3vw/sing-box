@@ -419,8 +419,18 @@ func deleteMemberOutboundFragment(directory, fileName string, checker func(direc
 	if err := copyJSONConfigDirectory(directory, validationDir, fileName); err != nil {
 		return err
 	}
-	if err := checker(validationDir); err != nil {
-		return err
+	entries, _ := os.ReadDir(validationDir)
+	hasJSON := false
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".json") {
+			hasJSON = true
+			break
+		}
+	}
+	if hasJSON {
+		if err := checker(validationDir); err != nil {
+			return err
+		}
 	}
 	finalPath := filepath.Join(directory, fileName)
 	if err := os.Remove(finalPath); err != nil && !os.IsNotExist(err) {
@@ -597,12 +607,15 @@ func renderShadowsocksOutboundForm(existing *shadowsocksOutboundForm) string {
 	}
 	deleteButton := ""
 	if existing != nil {
-		deleteButton = `<form method="post" action="/outbound/delete" style="margin-top:10px">
-      <button type="submit" class="action-button action-button-danger" style="width:100%%">Remove custom outbound</button>
+		deleteButton = `<form method="post" action="/outbound/delete" style="display:inline">
+      <button type="submit" class="delete-outbound-button">Remove</button>
     </form>`
 	}
 	return fmt.Sprintf(`<div class="form-section">
-    <div class="form-section-title">Custom Outbound</div>
+    <div class="form-section-header">
+      <div class="form-section-title">Custom Outbound</div>
+      %s
+    </div>
     <form method="post" action="/outbound/shadowsocks">
       <div class="field-row">
         <div class="field field-grow">
@@ -632,7 +645,6 @@ func renderShadowsocksOutboundForm(existing *shadowsocksOutboundForm) string {
       </div>
       <div id="test-result" class="test-result" style="display:none"></div>
     </form>
-    %s
   </div>
 <script>
 function testOutbound(btn){
@@ -653,7 +665,7 @@ function testOutbound(btn){
     .catch(function(e){r.style.display='block';r.className='test-result test-err';r.textContent='Request failed';})
     .finally(function(){btn.disabled=false;btn.textContent='Test';});
 }
-</script>`, server, port, method, password, deleteButton)
+</script>`, deleteButton, server, port, method, password)
 }
 
 func buildPage(title, content string) string {
@@ -715,7 +727,10 @@ body{
 .reset-button{width:100%%;margin-top:18px;border:1px solid #2a2a2a;border-radius:10px;background:#1a1a1a;color:#e5e5e5;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:10px 12px;cursor:pointer}
 .reset-button:hover{background:#232323;border-color:#3a3a3a}
 .form-section{border-top:1px solid #1e1e1e;margin-top:20px;padding-top:20px}
-.form-section-title{font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#555;margin-bottom:14px}
+.form-section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.form-section-title{font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#555}
+.delete-outbound-button{background:none;border:none;font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#555;cursor:pointer;padding:0}
+.delete-outbound-button:hover{color:#ef4444}
 .field-row{display:flex;gap:10px;margin-bottom:10px}
 .field{display:flex;flex-direction:column;gap:5px}
 .field-grow{flex:1}
