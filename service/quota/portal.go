@@ -339,7 +339,7 @@ func validateMemberOutboundFragmentCandidate(directory, fileName string, content
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		return err
 	}
-	validationDir, err := os.MkdirTemp(filepath.Dir(directory), ".quota-check-*")
+	validationDir, err := os.MkdirTemp("", "quota-check-*")
 	if err != nil {
 		return err
 	}
@@ -373,7 +373,7 @@ func deleteMemberOutboundFragment(directory, fileName string, checker func(direc
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		return err
 	}
-	validationDir, err := os.MkdirTemp(filepath.Dir(directory), ".quota-check-*")
+	validationDir, err := os.MkdirTemp("", "quota-check-*")
 	if err != nil {
 		return err
 	}
@@ -548,18 +548,40 @@ func renderSnapshot(s InboundSnapshot, admin bool, renderOutboundForm bool) stri
 }
 
 func renderShadowsocksOutboundForm() string {
-	return `<form method="post" action="/outbound/shadowsocks">
-    <div class="form-title">Custom Shadowsocks outbound</div>
-    <input name="server" placeholder="Server" autocomplete="off" required>
-    <input name="server_port" placeholder="Port" inputmode="numeric" required>
-    <input name="method" placeholder="Method" autocomplete="off" required>
-    <input name="password" placeholder="Password" type="password" required>
-    <button type="submit" class="reset-button">Save Shadowsocks outbound</button>
-    <button type="submit" class="reset-button" formaction="/outbound/shadowsocks/test">Test connection</button>
-  </form>
-  <form method="post" action="/outbound/delete">
-    <button type="submit" class="reset-button">Remove custom outbound</button>
-  </form>`
+	return `<div class="form-section">
+    <div class="form-section-title">Custom Outbound</div>
+    <form method="post" action="/outbound/shadowsocks">
+      <div class="field-row">
+        <div class="field field-grow">
+          <label class="field-label">Server</label>
+          <input class="field-input" name="server" placeholder="example.com" autocomplete="off" required>
+        </div>
+        <div class="field field-port">
+          <label class="field-label">Port</label>
+          <input class="field-input" name="server_port" placeholder="443" inputmode="numeric" required>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field field-grow">
+          <label class="field-label">Method</label>
+          <input class="field-input" name="method" placeholder="aes-256-gcm" autocomplete="off" required>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field field-grow">
+          <label class="field-label">Password</label>
+          <input class="field-input" name="password" placeholder="••••••••" type="password" required>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" formaction="/outbound/shadowsocks/test" class="action-button action-button-secondary">Test</button>
+        <button type="submit" class="action-button action-button-primary">Save</button>
+      </div>
+    </form>
+    <form method="post" action="/outbound/delete" style="margin-top:10px">
+      <button type="submit" class="action-button action-button-danger" style="width:100%%">Remove custom outbound</button>
+    </form>
+  </div>`
 }
 
 func buildPage(title, content string) string {
@@ -620,6 +642,24 @@ body{
 .stat-value{font-size:14px;font-weight:600;color:#d0d0d0}
 .reset-button{width:100%%;margin-top:18px;border:1px solid #2a2a2a;border-radius:10px;background:#1a1a1a;color:#e5e5e5;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:10px 12px;cursor:pointer}
 .reset-button:hover{background:#232323;border-color:#3a3a3a}
+.form-section{border-top:1px solid #1e1e1e;margin-top:20px;padding-top:20px}
+.form-section-title{font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#555;margin-bottom:14px}
+.field-row{display:flex;gap:10px;margin-bottom:10px}
+.field{display:flex;flex-direction:column;gap:5px}
+.field-grow{flex:1}
+.field-port{width:90px}
+.field-label{font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#555}
+.field-input{background:#0f0f0f;border:1px solid #2a2a2a;border-radius:8px;color:#e2e2e2;font-size:13px;padding:8px 10px;width:100%%;outline:none;font-family:inherit}
+.field-input:focus{border-color:#3b82f6}
+.field-input::placeholder{color:#444}
+.form-actions{display:flex;gap:8px;margin-top:4px}
+.action-button{flex:1;border-radius:10px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:10px 12px;cursor:pointer;border:1px solid transparent}
+.action-button-primary{background:#1d3461;border-color:#2a4a8a;color:#93c5fd}
+.action-button-primary:hover{background:#243d75;border-color:#3b5fa0}
+.action-button-secondary{background:#1a1a1a;border-color:#2a2a2a;color:#e5e5e5}
+.action-button-secondary:hover{background:#232323;border-color:#3a3a3a}
+.action-button-danger{background:#1a1a1a;border-color:#3f1f1f;color:#ef4444;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:10px 12px;cursor:pointer;border-radius:10px}
+.action-button-danger:hover{background:#2a1010;border-color:#5a2a2a}
 </style>
 </head>
 <body>
