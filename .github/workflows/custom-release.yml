@@ -33,7 +33,8 @@ jobs:
       - name: Build binary
         run: |
           TAGS=$(cat release/DEFAULT_BUILD_TAGS | tr ',' '\n' | grep -v -E '^(badlinkname|tfogo_checklinkname0|with_naive_outbound)$' | tr '\n' ',' | sed 's/,$//')
-          go build -mod=mod -tags "${TAGS}" -o sing-box-linux-amd64 ./cmd/sing-box
+          VERSION=${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          go build -mod=mod -tags "${TAGS}" -ldflags "-X github.com/sagernet/sing-box/constant.Version=${VERSION}" -o sing-box-linux-amd64 ./cmd/sing-box
 
       - name: Package binary
         run: |
