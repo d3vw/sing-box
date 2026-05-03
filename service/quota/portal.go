@@ -254,6 +254,8 @@ func (h *portalOutbound) testMemberShadowsocksOutbound(inboundTag, server string
 	ctx := h.ctx
 	if ctx == nil {
 		ctx = context.Background()
+	} else {
+		ctx = context.WithoutCancel(ctx)
 	}
 	return tester(ctx, inboundTag, server, serverPort, method, password)
 }
