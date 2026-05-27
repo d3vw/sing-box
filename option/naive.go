@@ -16,10 +16,12 @@ const (
 )
 
 type NaiveUser struct {
-	Username   string                   `json:"username"`
-	Password   string                   `json:"password"`
-	QuotaBytes *byteformats.MemoryBytes `json:"quota_bytes,omitempty"`
-	Admin      bool                     `json:"admin,omitempty"`
+	Username       string                   `json:"username"`
+	Password       string                   `json:"password"`
+	QuotaBytes     *byteformats.MemoryBytes `json:"quota_bytes,omitempty"`
+	Admin          bool                     `json:"admin,omitempty"`
+	RateLimitRead  *RateLimit               `json:"rate_limit_read,omitempty"`
+	RateLimitWrite *RateLimit               `json:"rate_limit_write,omitempty"`
 }
 
 type NaiveInboundOptions struct {

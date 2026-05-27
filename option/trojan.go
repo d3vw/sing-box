@@ -13,10 +13,12 @@ type TrojanInboundOptions struct {
 }
 
 type TrojanUser struct {
-	Name       string                   `json:"name"`
-	Password   string                   `json:"password"`
-	QuotaBytes *byteformats.MemoryBytes `json:"quota_bytes,omitempty"`
-	Admin      bool                     `json:"admin,omitempty"`
+	Name           string                   `json:"name"`
+	Password       string                   `json:"password"`
+	QuotaBytes     *byteformats.MemoryBytes `json:"quota_bytes,omitempty"`
+	Admin          bool                     `json:"admin,omitempty"`
+	RateLimitRead  *RateLimit               `json:"rate_limit_read,omitempty"`
+	RateLimitWrite *RateLimit               `json:"rate_limit_write,omitempty"`
 }
 
 type TrojanOutboundOptions struct {

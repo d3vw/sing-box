@@ -22,9 +22,11 @@ type Inbound interface {
 }
 
 type QuotaUser struct {
-	Name       string
-	QuotaBytes int64
-	Admin      bool
+	Name           string
+	QuotaBytes     int64
+	Admin          bool
+	RateLimitRead  int64
+	RateLimitWrite int64
 }
 
 type QuotaUserProvider interface {

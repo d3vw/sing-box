@@ -108,6 +108,10 @@ func (s *Service) Start(stage adapter.StartStage) error {
 			if provider, ok := ib.(adapter.QuotaUserProvider); ok {
 				for _, u := range provider.QuotaUsers() {
 					s.manager.AddUser(ib.Tag(), u.Name, u.QuotaBytes, u.Admin)
+					if u.RateLimitRead > 0 || u.RateLimitWrite > 0 {
+						s.manager.SetUserRateLimit(ib.Tag(), u.Name, u.RateLimitRead, u.RateLimitWrite)
+						s.logger.Info("quota: applied static rate limit for user ", u.Name, " in inbound ", ib.Tag(), ": read=", u.RateLimitRead, " B/s, write=", u.RateLimitWrite, " B/s")
+					}
 				}
 			}
 		}

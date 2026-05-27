@@ -11,11 +11,13 @@ type VLESSInboundOptions struct {
 }
 
 type VLESSUser struct {
-	Name       string                   `json:"name"`
-	UUID       string                   `json:"uuid"`
-	Flow       string                   `json:"flow,omitempty"`
-	QuotaBytes *byteformats.MemoryBytes `json:"quota_bytes,omitempty"`
-	Admin      bool                     `json:"admin,omitempty"`
+	Name           string                   `json:"name"`
+	UUID           string                   `json:"uuid"`
+	Flow           string                   `json:"flow,omitempty"`
+	QuotaBytes     *byteformats.MemoryBytes `json:"quota_bytes,omitempty"`
+	Admin          bool                     `json:"admin,omitempty"`
+	RateLimitRead  *RateLimit               `json:"rate_limit_read,omitempty"`
+	RateLimitWrite *RateLimit               `json:"rate_limit_write,omitempty"`
 }
 
 type VLESSOutboundOptions struct {

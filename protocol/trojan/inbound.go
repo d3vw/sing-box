@@ -123,8 +123,22 @@ func (h *Inbound) QuotaUsers() []adapter.QuotaUser {
 		if u.QuotaBytes != nil {
 			quotaBytes = int64(u.QuotaBytes.Value())
 		}
-		if quotaBytes > 0 || u.Admin {
-			result = append(result, adapter.QuotaUser{Name: u.Name, QuotaBytes: quotaBytes, Admin: u.Admin})
+		var rateLimitRead int64
+		if u.RateLimitRead != nil {
+			rateLimitRead = int64(*u.RateLimitRead)
+		}
+		var rateLimitWrite int64
+		if u.RateLimitWrite != nil {
+			rateLimitWrite = int64(*u.RateLimitWrite)
+		}
+		if quotaBytes > 0 || u.Admin || rateLimitRead > 0 || rateLimitWrite > 0 {
+			result = append(result, adapter.QuotaUser{
+				Name:           u.Name,
+				QuotaBytes:     quotaBytes,
+				Admin:          u.Admin,
+				RateLimitRead:  rateLimitRead,
+				RateLimitWrite: rateLimitWrite,
+			})
 		}
 	}
 	return result

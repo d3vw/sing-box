@@ -13,10 +13,12 @@ type AnyTLSInboundOptions struct {
 }
 
 type AnyTLSUser struct {
-	Name       string                   `json:"name,omitempty"`
-	Password   string                   `json:"password,omitempty"`
-	QuotaBytes *byteformats.MemoryBytes `json:"quota_bytes,omitempty"`
-	Admin      bool                     `json:"admin,omitempty"`
+	Name           string                   `json:"name,omitempty"`
+	Password       string                   `json:"password,omitempty"`
+	QuotaBytes     *byteformats.MemoryBytes `json:"quota_bytes,omitempty"`
+	Admin          bool                     `json:"admin,omitempty"`
+	RateLimitRead  *RateLimit               `json:"rate_limit_read,omitempty"`
+	RateLimitWrite *RateLimit               `json:"rate_limit_write,omitempty"`
 }
 
 type AnyTLSOutboundOptions struct {
