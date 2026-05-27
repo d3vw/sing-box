@@ -29,6 +29,8 @@ const (
 	TypeDERP               = "derp"
 	TypeResolved           = "resolved"
 	TypeSSMAPI             = "ssm-api"
+	TypeQuota              = "quota"
+	TypeQuotaPortal        = "quota-portal"
 	TypeCCM                = "ccm"
 	TypeOCM                = "ocm"
 	TypeOOMKiller          = "oom-killer"
