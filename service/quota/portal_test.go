@@ -16,7 +16,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
-	"time"
+
 
 	"github.com/sagernet/sing-box/adapter"
 	M "github.com/sagernet/sing/common/metadata"
@@ -836,51 +836,5 @@ func TestPortalMemberCanSaveShadowsocksOutboundWithMuxAndPadding(t *testing.T) {
 	}
 	if !retrieved.Mux || !retrieved.Padding {
 		t.Fatalf("expected retrieved form to have Mux=true and Padding=true, got Mux=%v Padding=%v", retrieved.Mux, retrieved.Padding)
-	}
-}
-
-func TestUserRateLimit(t *testing.T) {
-	manager := NewManager()
-	manager.AddUser("test-in", "test-user", 10000, false)
-	
-	// Set rate limit to a very low level: 100 bytes/sec
-	success := manager.SetUserRateLimit("test-in", "test-user", 100, 100)
-	if !success {
-		t.Fatal("failed to set rate limit")
-	}
-
-	client, server := net.Pipe()
-	defer client.Close()
-	defer server.Close()
-
-	ctx := context.Background()
-	metadata := adapter.InboundContext{
-		Inbound: "test-in",
-		User:    "test-user",
-	}
-
-	// Wrap connection
-	wrappedClient := manager.RoutedConnection(ctx, client, metadata, nil, nil)
-	defer wrappedClient.Close()
-
-	startTime := time.Now()
-	go func() {
-		buf := make([]byte, 1200)
-		_, _ = io.ReadFull(server, buf)
-	}()
-
-	// Write 1200 bytes, which exceeds the initial 1000 burst tokens (100 rate * 10 burst factor)
-	data := make([]byte, 1200)
-	n, err := wrappedClient.Write(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != 1200 {
-		t.Fatalf("expected to write 1200 bytes, wrote %d", n)
-	}
-
-	elapsed := time.Since(startTime)
-	if elapsed < 10*time.Millisecond {
-		t.Fatalf("rate limiting did not delay connection, took only %v", elapsed)
 	}
 }

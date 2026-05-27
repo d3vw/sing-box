@@ -116,13 +116,6 @@ If `listen` / `listen_port` are set on the service, a JSON API is available:
 | `GET` | `/quota/v1/inbounds/{tag}/users/{name}` | Get usage snapshot for a single user |
 | `POST` | `/quota/v1/inbounds/{tag}/users/{name}/reset` | Reset usage counters for a user |
 
-### Traffic Rate Limiting
-
-Controls upload and download speeds dynamically per user to prevent network congestion.
-
-- **Dynamic Rate Limiting**: Limiters can be updated dynamically at runtime via the `Manager.SetUserRateLimit(inboundTag, userName, rateLimitRead, rateLimitWrite)` API (speed is set in bytes per second).
-- **Token Bucket Algorithm**: Standard token bucket rate limiting on the connection level guarantees smooth and precise uploading and downloading throughput control.
-
 ## Documentation
 
 - Upstream docs: https://sing-box.sagernet.org

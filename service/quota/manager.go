@@ -7,7 +7,7 @@ import (
 	"sort"
 	"sync"
 	"sync/atomic"
-	"time"
+
 
 	"github.com/sagernet/sing-box/adapter"
 	R "github.com/sagernet/sing-box/route/rule"
@@ -26,15 +26,11 @@ func (k UserKey) String() string {
 }
 
 type UserState struct {
-	Key            UserKey
-	QuotaBytes     int64
-	Admin          bool
-	Uplink         atomic.Int64
-	Downlink       atomic.Int64
-	RateLimitRead  int64
-	RateLimitWrite int64
-	readLimiter    *TokenBucketLimiter
-	writeLimiter   *TokenBucketLimiter
+	Key        UserKey
+	QuotaBytes int64
+	Admin      bool
+	Uplink     atomic.Int64
+	Downlink   atomic.Int64
 }
 
 type UserSnapshot struct {
@@ -95,94 +91,7 @@ func (m *Manager) CloseUserConnections(inboundTag, userName string) {
 	}
 }
 
-type TokenBucketLimiter struct {
-	rate       float64
-	burst      float64
-	tokens     float64
-	lastUpdate time.Time
-	mu         sync.Mutex
-}
 
-func NewTokenBucketLimiter(rateVal int64) *TokenBucketLimiter {
-	return &TokenBucketLimiter{
-		rate:       float64(rateVal),
-		burst:      float64(rateVal) * 10,
-		tokens:     float64(rateVal) * 10,
-		lastUpdate: time.Now(),
-	}
-}
-
-func (l *TokenBucketLimiter) WaitN(ctx context.Context, n int) error {
-	for {
-		l.mu.Lock()
-		now := time.Now()
-		elapsed := now.Sub(l.lastUpdate).Seconds()
-		l.tokens += elapsed * l.rate
-		l.lastUpdate = now
-		
-		burstLimit := l.burst
-		if float64(n) > burstLimit {
-			burstLimit = float64(n)
-		}
-		if l.tokens > burstLimit {
-			l.tokens = burstLimit
-		}
-
-		if l.tokens >= float64(n) {
-			l.tokens -= float64(n)
-			l.mu.Unlock()
-			return nil
-		}
-		l.mu.Unlock()
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(10 * time.Millisecond):
-		}
-	}
-}
-
-type rateLimitConn struct {
-	net.Conn
-	readLimiter  *TokenBucketLimiter
-	writeLimiter *TokenBucketLimiter
-	ctx          context.Context
-}
-
-func (c *rateLimitConn) Read(b []byte) (n int, err error) {
-	n, err = c.Conn.Read(b)
-	if err != nil {
-		return n, err
-	}
-	if c.readLimiter != nil && n > 0 {
-		err = c.readLimiter.WaitN(c.ctx, n)
-	}
-	return n, err
-}
-
-func (c *rateLimitConn) Write(b []byte) (n int, err error) {
-	if c.writeLimiter == nil {
-		return c.Conn.Write(b)
-	}
-	var written int
-	for len(b) > 0 {
-		chunkSize := len(b)
-		if chunkSize > 65536 {
-			chunkSize = 65536
-		}
-		err = c.writeLimiter.WaitN(c.ctx, chunkSize)
-		if err != nil {
-			return written, err
-		}
-		n, err = c.Conn.Write(b[:chunkSize])
-		written += n
-		if err != nil {
-			return written, err
-		}
-		b = b[n:]
-	}
-	return written, nil
-}
 
 type quotaConn struct {
 	net.Conn
@@ -221,25 +130,7 @@ func (m *Manager) AddUser(inboundTag, userName string, quotaBytes int64, admin b
 	}
 }
 
-func (m *Manager) SetUserRateLimit(inboundTag, userName string, rateLimitRead, rateLimitWrite int64) bool {
-	state := m.userState(inboundTag, userName)
-	if state == nil {
-		return false
-	}
-	state.RateLimitRead = rateLimitRead
-	state.RateLimitWrite = rateLimitWrite
-	if rateLimitRead > 0 {
-		state.readLimiter = NewTokenBucketLimiter(rateLimitRead)
-	} else {
-		state.readLimiter = nil
-	}
-	if rateLimitWrite > 0 {
-		state.writeLimiter = NewTokenBucketLimiter(rateLimitWrite)
-	} else {
-		state.writeLimiter = nil
-	}
-	return true
-}
+
 
 func (m *Manager) CheckConnection(ctx context.Context, metadata adapter.InboundContext) error {
 	return m.checkUser(metadata.Inbound, metadata.User)
@@ -253,14 +144,6 @@ func (m *Manager) RoutedConnection(ctx context.Context, conn net.Conn, metadata 
 	state := m.userState(metadata.Inbound, metadata.User)
 	if state == nil {
 		return conn
-	}
-	if state.readLimiter != nil || state.writeLimiter != nil {
-		conn = &rateLimitConn{
-			Conn:         conn,
-			readLimiter:  state.readLimiter,
-			writeLimiter: state.writeLimiter,
-			ctx:          ctx,
-		}
 	}
 	key := UserKey{InboundTag: metadata.Inbound, UserName: metadata.User}
 	m.addConn(key, conn)
