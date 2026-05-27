@@ -21,6 +21,16 @@ type Inbound interface {
 	Tag() string
 }
 
+type QuotaUser struct {
+	Name       string
+	QuotaBytes int64
+	Admin      bool
+}
+
+type QuotaUserProvider interface {
+	QuotaUsers() []QuotaUser
+}
+
 type TCPInjectableInbound interface {
 	Inbound
 	ConnectionHandler

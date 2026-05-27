@@ -27,6 +27,7 @@ icon: material/new-box
 | `derp`            | [DERP](./derp)                        |
 | `hysteria-realm`  | [Hysteria Realm](./hysteria-realm)    |
 | `ocm`             | [OCM](./ocm)                          |
+| `quota`           | [Quota](./quota)                      |
 | `resolved`        | [Resolved](./resolved)                |
 | `ssm-api`         | [SSM API](./ssm-api)                  |
 
