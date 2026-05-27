@@ -46,6 +46,8 @@ type UserSnapshot struct {
 	QuotaBytes     int64  `json:"quota_bytes"`
 	RemainingBytes int64  `json:"remaining_bytes"`
 	Blocked        bool   `json:"blocked"`
+	RateLimitRead  int64  `json:"rate_limit_read"`
+	RateLimitWrite int64  `json:"rate_limit_write"`
 }
 
 type Manager struct {
@@ -355,6 +357,8 @@ func (s *UserState) snapshot() UserSnapshot {
 		QuotaBytes:     s.QuotaBytes,
 		RemainingBytes: remaining,
 		Blocked:        used >= s.QuotaBytes,
+		RateLimitRead:  s.RateLimitRead,
+		RateLimitWrite: s.RateLimitWrite,
 	}
 }
 

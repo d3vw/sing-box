@@ -209,6 +209,10 @@ func (h *portalOutbound) serveHTTP(conn net.Conn, inboundTag, userName string) {
 		h.handleTestShadowsocksOutbound(conn, req, inboundTag, userName, isAdmin)
 		return
 	}
+	if req.Method == http.MethodPost && req.URL.Path == "/quota/rate-limit" {
+		h.handleSaveRateLimit(conn, req, isAdmin)
+		return
+	}
 	if req.Method == http.MethodPost && req.URL.Path == "/outbound/delete" {
 		h.handleDeleteMemberOutbound(conn, inboundTag, userName, isAdmin)
 		return
@@ -257,6 +261,40 @@ func (h *portalOutbound) handleReset(conn net.Conn, req *http.Request, isAdmin b
 		h.writeHTML(conn, http.StatusNotFound, buildPage("Not found", `<div class="card">User not found</div>`), nil)
 		return
 	}
+	h.writeHTML(conn, http.StatusSeeOther, "", map[string]string{"Location": "/"})
+}
+
+func (h *portalOutbound) handleSaveRateLimit(conn net.Conn, req *http.Request, isAdmin bool) {
+	if !isAdmin {
+		h.writeHTML(conn, http.StatusForbidden, buildPage("Forbidden", `<div class="card">Forbidden</div>`), nil)
+		return
+	}
+	if err := req.ParseForm(); err != nil {
+		h.writeHTML(conn, http.StatusBadRequest, buildPage("Bad request", `<div class="card">Bad request</div>`), nil)
+		return
+	}
+	tag := req.Form.Get("tag")
+	name := req.Form.Get("name")
+	rateLimitReadStr := req.Form.Get("rate_limit_read")
+	rateLimitWriteStr := req.Form.Get("rate_limit_write")
+
+	rateLimitRead, err := option.ParseRateLimit(rateLimitReadStr)
+	if err != nil {
+		h.writeHTML(conn, http.StatusBadRequest, buildPage("Invalid rate limit format", `<div class="card">Invalid upload rate limit format</div>`), nil)
+		return
+	}
+	rateLimitWrite, err := option.ParseRateLimit(rateLimitWriteStr)
+	if err != nil {
+		h.writeHTML(conn, http.StatusBadRequest, buildPage("Invalid rate limit format", `<div class="card">Invalid download rate limit format</div>`), nil)
+		return
+	}
+
+	success := h.manager.SetUserRateLimit(tag, name, rateLimitRead, rateLimitWrite)
+	if !success {
+		h.writeHTML(conn, http.StatusNotFound, buildPage("Not found", `<div class="card">User not found</div>`), nil)
+		return
+	}
+
 	h.writeHTML(conn, http.StatusSeeOther, "", map[string]string{"Location": "/"})
 }
 
@@ -663,7 +701,30 @@ func renderSnapshot(s UserSnapshot, admin bool, existing *shadowsocksOutboundFor
     <input type="hidden" name="tag" value="%s">
     <input type="hidden" name="name" value="%s">
     <button type="submit" class="reset-button">Reset quota</button>
-  </form>`, html.EscapeString(s.InboundTag), html.EscapeString(s.UserName))
+  </form>
+  <div class="form-section">
+    <div class="form-section-title" style="margin-bottom:8px">Rate Limiting</div>
+    <form method="post" action="/quota/rate-limit">
+      <input type="hidden" name="tag" value="%s">
+      <input type="hidden" name="name" value="%s">
+      <div class="field-row">
+        <div class="field field-grow">
+          <label class="field-label">Upload Limit (Read)</label>
+          <input class="field-input" name="rate_limit_read" placeholder="Unlimited (e.g. 100Mbps)" autocomplete="off" value="%s">
+        </div>
+        <div class="field field-grow">
+          <label class="field-label">Download Limit (Write)</label>
+          <input class="field-input" name="rate_limit_write" placeholder="Unlimited (e.g. 10MB/s)" autocomplete="off" value="%s">
+        </div>
+      </div>
+      <button type="submit" class="reset-button" style="margin-top:8px;background:#3b82f6;border-color:#2a4a8a;color:#fff">Save limits</button>
+    </form>
+  </div>`,
+			html.EscapeString(s.InboundTag), html.EscapeString(s.UserName),
+			html.EscapeString(s.InboundTag), html.EscapeString(s.UserName),
+			html.EscapeString(formatRateLimit(s.RateLimitRead)),
+			html.EscapeString(formatRateLimit(s.RateLimitWrite)),
+		)
 	}
 	extraControls := resetControl
 	if existing != nil {
@@ -914,4 +975,31 @@ func formatBytes(b int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.2f %cB", float64(b)/float64(div), "KMGTPE"[exp])
+}
+
+func formatRateLimit(bytesPerSec int64) string {
+	if bytesPerSec <= 0 {
+		return ""
+	}
+	if bytesPerSec%125000 == 0 {
+		return fmt.Sprintf("%dMbps", bytesPerSec/125000)
+	}
+	if bytesPerSec%125 == 0 && bytesPerSec < 125000 {
+		return fmt.Sprintf("%dKbps", bytesPerSec/125)
+	}
+	if bytesPerSec >= 1024*1024 {
+		mb := float64(bytesPerSec) / (1024 * 1024)
+		if mb == float64(int64(mb)) {
+			return fmt.Sprintf("%dMB/s", int64(mb))
+		}
+		return fmt.Sprintf("%.1fMB/s", mb)
+	}
+	if bytesPerSec >= 1024 {
+		kb := float64(bytesPerSec) / 1024
+		if kb == float64(int64(kb)) {
+			return fmt.Sprintf("%dKB/s", int64(kb))
+		}
+		return fmt.Sprintf("%.1fKB/s", kb)
+	}
+	return fmt.Sprintf("%dB/s", bytesPerSec)
 }

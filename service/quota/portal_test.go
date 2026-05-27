@@ -133,6 +133,24 @@ func TestPortalAdminPageRendersResetControls(t *testing.T) {
 	}
 }
 
+func TestPortalAdminPageRendersRateLimitControls(t *testing.T) {
+	manager := newTestPortalManager()
+	h := &portalOutbound{manager: manager}
+
+	page := h.renderAll(true)
+
+	for _, want := range []string{
+		`<form method="post" action="/quota/rate-limit">`,
+		`name="rate_limit_read"`,
+		`name="rate_limit_write"`,
+		`Save limits`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Fatalf("expected admin page to contain %q, got:\n%s", want, page)
+		}
+	}
+}
+
 func TestPortalMemberPageDoesNotRenderResetControls(t *testing.T) {
 	manager := newTestPortalManager()
 	snapshot, _ := manager.Snapshot(testInboundTag, testUserName)
