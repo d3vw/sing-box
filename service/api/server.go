@@ -88,32 +88,41 @@ func (s *Service) Start(stage adapter.StartStage) error {
 			return s.ctx
 		},
 	}
-	if s.tlsConfig != nil {
-		err := s.tlsConfig.Start()
+	if s.options.ListenPort != 0 || s.options.Listen != nil {
+		if s.tlsConfig != nil {
+			err := s.tlsConfig.Start()
+			if err != nil {
+				return E.Cause(err, "create TLS config")
+			}
+			if !common.Contains(s.tlsConfig.NextProtos(), http2.NextProtoTLS) {
+				s.tlsConfig.SetNextProtos(append([]string{http2.NextProtoTLS}, s.tlsConfig.NextProtos()...))
+			}
+			if !common.Contains(s.tlsConfig.NextProtos(), "http/1.1") {
+				s.tlsConfig.SetNextProtos(append(s.tlsConfig.NextProtos(), "http/1.1"))
+			}
+		}
+		tcpListener, err := s.listener.ListenTCP()
 		if err != nil {
-			return E.Cause(err, "create TLS config")
+			return err
 		}
-		if !common.Contains(s.tlsConfig.NextProtos(), http2.NextProtoTLS) {
-			s.tlsConfig.SetNextProtos(append([]string{http2.NextProtoTLS}, s.tlsConfig.NextProtos()...))
+		if s.tlsConfig != nil {
+			tcpListener = aTLS.NewListener(tcpListener, s.tlsConfig)
 		}
-		if !common.Contains(s.tlsConfig.NextProtos(), "http/1.1") {
-			s.tlsConfig.SetNextProtos(append(s.tlsConfig.NextProtos(), "http/1.1"))
-		}
+		go func() {
+			serveErr := s.httpServer.Serve(tcpListener)
+			if serveErr != nil && s.ctx.Err() == nil {
+				s.logger.Error("serve error: ", serveErr)
+			}
+		}()
 	}
-	tcpListener, err := s.listener.ListenTCP()
-	if err != nil {
-		return err
-	}
-	if s.tlsConfig != nil {
-		tcpListener = aTLS.NewListener(tcpListener, s.tlsConfig)
-	}
-	go func() {
-		serveErr := s.httpServer.Serve(tcpListener)
-		if serveErr != nil && s.ctx.Err() == nil {
-			s.logger.Error("serve error: ", serveErr)
-		}
-	}()
 	return nil
+}
+
+func (s *Service) Handler() http.Handler {
+	if s.httpServer == nil {
+		return nil
+	}
+	return s.httpServer.Handler
 }
 
 func (s *Service) Close() error {
@@ -134,4 +143,24 @@ func (s *Service) Close() error {
 		common.PtrOrNil(s.listener),
 		s.tlsConfig,
 	)
+}
+
+func (s *Service) APIURL() string {
+	l := s.listener.TCPListener()
+	if l == nil {
+		return ""
+	}
+	addr := l.Addr().String()
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return ""
+	}
+	if host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	scheme := "http"
+	if s.tlsConfig != nil {
+		scheme = "https"
+	}
+	return scheme + "://" + net.JoinHostPort(host, port)
 }

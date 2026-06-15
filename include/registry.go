@@ -82,6 +82,9 @@ func OutboundRegistry() *outbound.Registry {
 	direct.RegisterOutbound(registry)
 
 	block.RegisterOutbound(registry)
+	registerQuotaOutbound(registry)
+	registerSpeedtestOutbound(registry)
+	registerDashboardUIOutbound(registry)
 
 	group.RegisterSelector(registry)
 	group.RegisterURLTest(registry)
@@ -139,6 +142,9 @@ func ServiceRegistry() *service.Registry {
 
 	api.RegisterService(registry)
 	resolved.RegisterService(registry)
+	registerQuotaService(registry)
+	registerSpeedtestService(registry)
+	registerDashboardUIService(registry)
 	ssmapi.RegisterService(registry)
 
 	registerQUICServices(registry)

@@ -122,6 +122,20 @@ func (h *MultiInbound) SetTracker(tracker adapter.SSMTracker) {
 	h.tracker = tracker
 }
 
+func (h *MultiInbound) QuotaUsers() []adapter.QuotaUser {
+	var result []adapter.QuotaUser
+	for _, u := range h.users {
+		quotaBytes := int64(0)
+		if u.QuotaBytes != nil {
+			quotaBytes = int64(u.QuotaBytes.Value())
+		}
+		if quotaBytes > 0 || u.Admin {
+			result = append(result, adapter.QuotaUser{Name: u.Name, QuotaBytes: quotaBytes, Admin: u.Admin})
+		}
+	}
+	return result
+}
+
 func (h *MultiInbound) UpdateUsers(users []string, uPSKs []string) error {
 	err := h.service.UpdateUsersWithPasswords(common.MapIndexed(users, func(index int, user string) int {
 		return index

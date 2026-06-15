@@ -46,6 +46,7 @@ type Router struct {
 	neighborResolver  adapter.NeighborResolver
 	pauseManager      pause.Manager
 	trackers          []adapter.ConnectionTracker
+	inspectors        []adapter.ConnectionInspector
 	platformInterface adapter.PlatformInterface
 	started           bool
 }
@@ -269,6 +270,9 @@ func (r *Router) Rules() []adapter.Rule {
 
 func (r *Router) AppendTracker(tracker adapter.ConnectionTracker) {
 	r.trackers = append(r.trackers, tracker)
+	if inspector, isInspector := tracker.(adapter.ConnectionInspector); isInspector {
+		r.inspectors = append(r.inspectors, inspector)
+	}
 }
 
 func (r *Router) NeedFindProcess() bool {

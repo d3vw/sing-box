@@ -39,6 +39,12 @@ const (
 	TypeHysteriaRealm      = "hysteria-realm"
 	TypeACME               = "acme"
 	TypeCloudflareOriginCA = "cloudflare-origin-ca"
+	TypeQuota              = "quota"
+	TypeQuotaPortal        = "quota-portal"
+	TypeSpeedtest          = "speedtest"
+	TypeSpeedtestPortal    = "speedtest-portal"
+	TypeDashboardUI        = "dashboard-ui"
+	TypeDashboardUIPortal  = "dashboard-ui-portal"
 )
 
 const (
