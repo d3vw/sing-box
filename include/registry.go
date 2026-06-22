@@ -40,6 +40,7 @@ import (
 	originca "github.com/sagernet/sing-box/service/origin_ca"
 	"github.com/sagernet/sing-box/service/quota"
 	"github.com/sagernet/sing-box/service/resolved"
+	"github.com/sagernet/sing-box/service/speedtest"
 	"github.com/sagernet/sing-box/service/ssmapi"
 	E "github.com/sagernet/sing/common/exceptions"
 )
@@ -82,6 +83,7 @@ func OutboundRegistry() *outbound.Registry {
 
 	block.RegisterOutbound(registry)
 	quota.RegisterPortalOutbound(registry)
+	speedtest.RegisterPortalOutbound(registry)
 
 	group.RegisterSelector(registry)
 	group.RegisterURLTest(registry)
@@ -139,6 +141,7 @@ func ServiceRegistry() *service.Registry {
 	api.RegisterService(registry)
 	resolved.RegisterService(registry)
 	quota.RegisterService(registry)
+	speedtest.RegisterService(registry)
 	ssmapi.RegisterService(registry)
 
 	registerQUICServices(registry)
