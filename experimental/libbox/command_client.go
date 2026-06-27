@@ -682,31 +682,6 @@ func (c *CommandClient) TriggerOOMReport() error {
 	return nil
 }
 
-func (c *CommandClient) TriggerGoCrash() error {
-	_, err := callWithResult(c, func(client daemon.StartedServiceClient) (*emptypb.Empty, error) {
-		return client.TriggerDebugCrash(context.Background(), &daemon.DebugCrashRequest{
-			Type: daemon.DebugCrashRequest_GO,
-		})
-	})
-	return err
-}
-
-func (c *CommandClient) TriggerNativeCrash() error {
-	_, err := callWithResult(c, func(client daemon.StartedServiceClient) (*emptypb.Empty, error) {
-		return client.TriggerDebugCrash(context.Background(), &daemon.DebugCrashRequest{
-			Type: daemon.DebugCrashRequest_NATIVE,
-		})
-	})
-	return err
-}
-
-func (c *CommandClient) TriggerOOMReport() error {
-	_, err := callWithResult(c, func(client daemon.StartedServiceClient) (*emptypb.Empty, error) {
-		return client.TriggerOOMReport(context.Background(), &emptypb.Empty{})
-	})
-	return err
-}
-
 func (c *CommandClient) GetDeprecatedNotes() (DeprecatedNoteIterator, error) {
 	return callWithResult(c, func(ctx context.Context, client daemon.StartedServiceClient) (DeprecatedNoteIterator, error) {
 		warnings, err := client.GetDeprecatedWarnings(ctx, &emptypb.Empty{})
@@ -733,6 +708,16 @@ func (c *CommandClient) GetStartedAt() (int64, error) {
 			return 0, E.Cause(err, "get started at")
 		}
 		return startedAt.StartedAt, nil
+	})
+}
+
+func (c *CommandClient) GetAPIVersion() (int32, error) {
+	return callWithResult(c, func(ctx context.Context, client daemon.StartedServiceClient) (int32, error) {
+		version, err := client.GetVersion(ctx, &emptypb.Empty{})
+		if err != nil {
+			return 0, E.Cause(err, "get version")
+		}
+		return version.ApiVersion, nil
 	})
 }
 

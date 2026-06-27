@@ -187,7 +187,7 @@ func New(options Options) (*Box, error) {
 		len(certificateOptions.Certificate) > 0 ||
 		len(certificateOptions.CertificatePath) > 0 ||
 		len(certificateOptions.CertificateDirectoryPath) > 0 {
-		certificateStore, err := certificate.NewStore(ctx, logFactory.NewLogger("certificate"), certificateOptions)
+		certificateStore, err := certificate.NewStore(logFactory.NewLogger("certificate"), certificateOptions)
 		if err != nil {
 			return nil, err
 		}
@@ -600,14 +600,6 @@ func (s *Box) Close() error {
 			return E.Cause(err, "close ", closeItem.name)
 		})
 		done()
-	}
-	if s.httpClientService != nil {
-		s.logger.Trace("close ", s.httpClientService.Name())
-		startTime := time.Now()
-		err = E.Append(err, s.httpClientService.Close(), func(err error) error {
-			return E.Cause(err, "close ", s.httpClientService.Name())
-		})
-		s.logger.Trace("close ", s.httpClientService.Name(), " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
 	}
 	if s.httpClientService != nil {
 		s.logger.Trace("close ", s.httpClientService.Name())
