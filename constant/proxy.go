@@ -42,6 +42,8 @@ const (
 	TypeQuotaPortal        = "quota-portal"
 	TypeSpeedtest          = "speedtest"
 	TypeSpeedtestPortal    = "speedtest-portal"
+	TypeDashboardUI        = "dashboard-ui"
+	TypeDashboardUIPortal  = "dashboard-ui-portal"
 )
 
 const (

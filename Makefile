@@ -276,6 +276,12 @@ docs_install:
 	python3 -m venv venv
 	source ./venv/bin/activate && pip install --force-reinstall mkdocs-material=="9.7.2" mkdocs-static-i18n=="1.2.*"
 
+DASHBOARD_SRC ?= /home/grey/GitHub/sing-box-dashboard/dist
+
+sync-dashboard-ui:
+	rm -rf service/dashboard_ui/dist
+	cp -r $(DASHBOARD_SRC) service/dashboard_ui/dist
+
 clean:
 	rm -rf bin dist sing-box
 	rm -f $(shell go env GOPATH)/sing-box
