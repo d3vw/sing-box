@@ -14,6 +14,7 @@ import (
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/bufio"
+	"github.com/sagernet/sing/common/byteformats"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/udpnat2"
@@ -32,15 +33,17 @@ type Inbound struct {
 	udpNat              *udpnat.Service
 	overrideOption      int
 	overrideDestination M.Socksaddr
+	quotaBytes          *byteformats.MemoryBytes
 }
 
 func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.DirectInboundOptions) (adapter.Inbound, error) {
 	options.UDPFragmentDefault = true
 	inbound := &Inbound{
-		Adapter: inbound.NewAdapter(C.TypeDirect, tag),
-		ctx:     ctx,
-		router:  router,
-		logger:  logger,
+		Adapter:    inbound.NewAdapter(C.TypeDirect, tag),
+		ctx:        ctx,
+		router:     router,
+		logger:     logger,
+		quotaBytes: options.QuotaBytes,
 	}
 	if options.OverrideAddress != "" && options.OverridePort != 0 {
 		inbound.overrideOption = 1
@@ -83,6 +86,13 @@ func (i *Inbound) InterfaceUpdated(ctx context.Context) {
 
 func (i *Inbound) Close() error {
 	return i.listener.Close()
+}
+
+func (i *Inbound) QuotaUsers() []adapter.QuotaUser {
+	if i.quotaBytes == nil || i.quotaBytes.Value() == 0 {
+		return nil
+	}
+	return []adapter.QuotaUser{{Name: adapter.QuotaInboundUser, QuotaBytes: int64(i.quotaBytes.Value())}}
 }
 
 func (i *Inbound) NewPacket(buffer *buf.Buffer, source M.Socksaddr) {

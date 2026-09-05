@@ -67,7 +67,9 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 		}),
 		networkIsDefault: options.Network == "",
 		network:          options.Network.Build(),
-		authenticator:    auth.NewAuthenticator(options.Users),
+		authenticator: auth.NewAuthenticator(common.Map(options.Users, func(u option.NaiveUser) auth.User {
+			return auth.User{Username: u.Username, Password: u.Password}
+		})),
 	}
 	if common.Contains(inbound.network, N.NetworkUDP) {
 		if options.TLS == nil || !options.TLS.Enabled {
@@ -85,6 +87,20 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 		inbound.tlsConfig = tlsConfig
 	}
 	return inbound, nil
+}
+
+func (n *Inbound) QuotaUsers() []adapter.QuotaUser {
+	var result []adapter.QuotaUser
+	for _, u := range n.options.Users {
+		quotaBytes := int64(0)
+		if u.QuotaBytes != nil {
+			quotaBytes = int64(u.QuotaBytes.Value())
+		}
+		if quotaBytes > 0 || u.Admin {
+			result = append(result, adapter.QuotaUser{Name: u.Username, QuotaBytes: quotaBytes, Admin: u.Admin})
+		}
+	}
+	return result
 }
 
 func (n *Inbound) Start(stage adapter.StartStage) error {

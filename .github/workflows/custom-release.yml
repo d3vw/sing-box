@@ -1,0 +1,58 @@
+name: Release Custom Linux AMD64
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and release linux/amd64
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) || github.ref }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ~1.25.9
+
+      - name: Build binary
+        run: |
+          TAGS=$(cat release/DEFAULT_BUILD_TAGS_OTHERS | tr ',' '\n' | grep -v -E '^(badlinkname|tfogo_checklinkname0|with_naive_outbound)$' | tr '\n' ',' | sed 's/,$//')
+          VERSION=${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          go build -mod=mod -tags "${TAGS}" -ldflags "-X github.com/sagernet/sing-box/constant.Version=${VERSION}" -o sing-box-linux-amd64 ./cmd/sing-box
+
+      - name: Package binary
+        run: |
+          tar -czf sing-box-linux-amd64.tar.gz sing-box-linux-amd64
+
+      - name: Generate release notes
+        run: |
+          cat > release-notes.md <<'EOF'
+          Custom build of sing-box for personal use.
+
+          This release is intended for replacing the original `sing-box` binary after installing the upstream version.
+          EOF
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            sing-box-linux-amd64.tar.gz
+            sing-box-linux-amd64
+          body_path: release-notes.md
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}

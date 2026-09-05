@@ -120,6 +120,20 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 	return inbound, nil
 }
 
+func (h *Inbound) QuotaUsers() []adapter.QuotaUser {
+	var result []adapter.QuotaUser
+	for _, u := range h.users {
+		quotaBytes := int64(0)
+		if u.QuotaBytes != nil {
+			quotaBytes = int64(u.QuotaBytes.Value())
+		}
+		if quotaBytes > 0 || u.Admin {
+			result = append(result, adapter.QuotaUser{Name: u.Name, QuotaBytes: quotaBytes, Admin: u.Admin})
+		}
+	}
+	return result
+}
+
 func (h *Inbound) Start(stage adapter.StartStage) error {
 	if stage != adapter.StartStateStart {
 		return nil

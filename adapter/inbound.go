@@ -21,6 +21,30 @@ type Inbound interface {
 	Tag() string
 }
 
+type QuotaUser struct {
+	Name       string
+	QuotaBytes int64
+	Admin      bool
+
+	// Subscription fields, used by the quota portal to render each user's
+	// ss:// link and QR code. Empty Method means no subscription link can
+	// be built for this user.
+	Method             string
+	ServerPassword     string
+	UserPassword       string
+	SubscriptionServer string
+	SubscriptionPort   uint16
+}
+
+type QuotaUserProvider interface {
+	QuotaUsers() []QuotaUser
+}
+
+// QuotaInboundUser is the reserved UserKey.UserName used to track quota for
+// an entire inbound that has no per-connection user identity (metadata.User
+// is empty), e.g. a direct inbound used for transparent redirection.
+const QuotaInboundUser = "*"
+
 type TCPInjectableInbound interface {
 	Inbound
 	ConnectionHandler

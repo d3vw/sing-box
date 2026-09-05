@@ -3,15 +3,17 @@ package option
 import (
 	"context"
 
+	"github.com/sagernet/sing/common/byteformats"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/json"
 )
 
 type DirectInboundOptions struct {
 	ListenOptions
-	Network         NetworkList `json:"network,omitempty"`
-	OverrideAddress string      `json:"override_address,omitempty"`
-	OverridePort    uint16      `json:"override_port,omitempty"`
+	Network         NetworkList              `json:"network,omitempty"`
+	OverrideAddress string                   `json:"override_address,omitempty"`
+	OverridePort    uint16                   `json:"override_port,omitempty"`
+	QuotaBytes      *byteformats.MemoryBytes `json:"quota_bytes,omitempty"`
 }
 
 type _DirectOutboundOptions struct {

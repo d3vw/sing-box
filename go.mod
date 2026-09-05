@@ -62,6 +62,7 @@ require (
 	github.com/sagernet/tailscale v1.102.1-sing-box-1.14-mod.4
 	github.com/sagernet/wireguard-go v0.0.5
 	github.com/sagernet/ws v0.0.0-20231204124109-acfe8907c854
+	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.0
 	github.com/tailscale/go-winio v0.0.0-20231025203758-c4f33415bf55

@@ -1,5 +1,7 @@
 package option
 
+import "github.com/sagernet/sing/common/byteformats"
+
 type VMessInboundOptions struct {
 	ListenOptions
 	Users []VMessUser `json:"users,omitempty"`
@@ -9,9 +11,11 @@ type VMessInboundOptions struct {
 }
 
 type VMessUser struct {
-	Name    string `json:"name"`
-	UUID    string `json:"uuid"`
-	AlterId int    `json:"alterId,omitempty"`
+	Name       string                   `json:"name"`
+	UUID       string                   `json:"uuid"`
+	AlterId    int                      `json:"alterId,omitempty"`
+	QuotaBytes *byteformats.MemoryBytes `json:"quota_bytes,omitempty"`
+	Admin      bool                     `json:"admin,omitempty"`
 }
 
 type VMessOutboundOptions struct {

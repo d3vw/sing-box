@@ -102,6 +102,20 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 	return inbound, nil
 }
 
+func (h *Inbound) QuotaUsers() []adapter.QuotaUser {
+	var result []adapter.QuotaUser
+	for _, u := range h.users {
+		quotaBytes := int64(0)
+		if u.QuotaBytes != nil {
+			quotaBytes = int64(u.QuotaBytes.Value())
+		}
+		if quotaBytes > 0 || u.Admin {
+			result = append(result, adapter.QuotaUser{Name: u.Name, QuotaBytes: quotaBytes, Admin: u.Admin})
+		}
+	}
+	return result
+}
+
 func (h *Inbound) Start(stage adapter.StartStage) error {
 	if stage != adapter.StartStateStart {
 		return nil
@@ -179,9 +193,8 @@ func (h *Inbound) newConnectionEx(ctx context.Context, conn net.Conn, metadata a
 	user := h.users[userIndex].Name
 	if user == "" {
 		user = F.ToString(userIndex)
-	} else {
-		metadata.User = user
 	}
+	metadata.User = user
 	h.logger.InfoContext(ctx, "[", user, "] inbound connection to ", metadata.Destination)
 	h.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }
@@ -197,9 +210,8 @@ func (h *Inbound) newPacketConnectionEx(ctx context.Context, conn N.PacketConn, 
 	user := h.users[userIndex].Name
 	if user == "" {
 		user = F.ToString(userIndex)
-	} else {
-		metadata.User = user
 	}
+	metadata.User = user
 	if metadata.Destination.Fqdn == packetaddr.SeqPacketMagicAddress {
 		metadata.Destination = M.Socksaddr{}
 		conn = packetaddr.NewConn(bufio.NewNetPacketConn(conn), metadata.Destination)
