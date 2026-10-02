@@ -1,5 +1,7 @@
 package option
 
+import "github.com/sagernet/sing/common/byteformats"
+
 type ShadowsocksInboundOptions struct {
 	ListenOptions
 	Network      NetworkList              `json:"network,omitempty"`
@@ -12,8 +14,10 @@ type ShadowsocksInboundOptions struct {
 }
 
 type ShadowsocksUser struct {
-	Name     string `json:"name"`
-	Password string `json:"password"`
+	Name       string                   `json:"name"`
+	Password   string                   `json:"password"`
+	QuotaBytes *byteformats.MemoryBytes `json:"quota_bytes,omitempty"`
+	Admin      bool                     `json:"admin,omitempty"`
 }
 
 type ShadowsocksDestination struct {

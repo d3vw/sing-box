@@ -33,6 +33,10 @@ type Inbound struct {
 	logger    logger.ContextLogger
 	listener  *listener.Listener
 	service   *anytls.MultiService[string]
+	users     []option.AnyTLSUser
+
+	subscriptionPort uint16
+	serverName       string
 }
 
 func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.AnyTLSInboundOptions) (adapter.Inbound, error) {
@@ -55,6 +59,11 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 		paddingScheme = []byte(strings.Join(options.PaddingScheme, "\n"))
 	}
 
+	inbound.users = options.Users
+	inbound.subscriptionPort = options.ListenPort
+	if options.TLS != nil {
+		inbound.serverName = options.TLS.ServerName
+	}
 	service, err := anytls.NewMultiService[string](anytls.ServiceOptions{
 		PaddingScheme: paddingScheme,
 		Handler:       (*inboundHandler)(inbound),
@@ -79,6 +88,28 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 		ConnectionHandler: inbound,
 	})
 	return inbound, nil
+}
+
+func (h *Inbound) QuotaUsers() []adapter.QuotaUser {
+	var result []adapter.QuotaUser
+	for _, u := range h.users {
+		quotaBytes := int64(0)
+		if u.QuotaBytes != nil {
+			quotaBytes = int64(u.QuotaBytes.Value())
+		}
+		if quotaBytes > 0 || u.Admin {
+			result = append(result, adapter.QuotaUser{
+				Name:             u.Name,
+				QuotaBytes:       quotaBytes,
+				Admin:            u.Admin,
+				Type:             "anytls",
+				UserPassword:     u.Password,
+				SubscriptionPort: h.subscriptionPort,
+				ServerName:       h.serverName,
+			})
+		}
+	}
+	return result
 }
 
 func (h *Inbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {

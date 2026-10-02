@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"github.com/sagernet/sing-box/adapter"
@@ -42,6 +43,8 @@ type Listener struct {
 	packetOutbound       chan *N.PacketBuffer
 	packetOutboundClosed chan struct{}
 	shutdown             atomic.Bool
+	connsAccess          sync.Mutex
+	conns                map[net.Conn]struct{}
 }
 
 type Options struct {
@@ -75,6 +78,7 @@ func New(
 		setSystemProxy:           options.SetSystemProxy,
 		systemProxySOCKS:         options.SystemProxySOCKS,
 		tproxy:                   options.TProxy,
+		conns:                    make(map[net.Conn]struct{}),
 	}
 }
 
@@ -129,6 +133,19 @@ func (l *Listener) Close() error {
 		}
 		err = E.Errors(err, l.systemProxy.Close())
 	}
+
+	l.connsAccess.Lock()
+	conns := make([]net.Conn, 0, len(l.conns))
+	for c := range l.conns {
+		conns = append(conns, c)
+	}
+	l.conns = make(map[net.Conn]struct{})
+	l.connsAccess.Unlock()
+
+	for _, c := range conns {
+		_ = c.Close()
+	}
+
 	return E.Errors(err, common.Close(
 		l.tcpListener,
 		common.PtrOrNil(l.udpConn),

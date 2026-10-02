@@ -1,14 +1,20 @@
 package option
 
 import (
-	"github.com/sagernet/sing/common/auth"
 	"github.com/sagernet/sing/common/byteformats"
 	"github.com/sagernet/sing/common/json/badoption"
 )
 
+type NaiveUser struct {
+	Username   string                   `json:"username"`
+	Password   string                   `json:"password"`
+	QuotaBytes *byteformats.MemoryBytes `json:"quota_bytes,omitempty"`
+	Admin      bool                     `json:"admin,omitempty"`
+}
+
 type NaiveInboundOptions struct {
 	ListenOptions
-	Users                 []auth.User `json:"users,omitempty"`
+	Users                 []NaiveUser `json:"users,omitempty"`
 	Network               NetworkList `json:"network,omitempty"`
 	QUICCongestionControl string      `json:"quic_congestion_control,omitempty" enum:"bbr,cubic,reno"`
 	InboundTLSOptionsContainer

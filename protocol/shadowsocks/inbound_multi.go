@@ -44,6 +44,10 @@ type MultiInbound struct {
 	usersAccess sync.RWMutex
 	users       []option.ShadowsocksUser
 	tracker     adapter.SSMTracker
+
+	method           string
+	serverPassword   string
+	subscriptionPort uint16
 }
 
 func newMultiInbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.ShadowsocksInboundOptions) (*MultiInbound, error) {
@@ -73,6 +77,7 @@ func newMultiInbound(ctx context.Context, router adapter.Router, logger log.Cont
 			adapter.NewLegacyUpstreamHandler(adapter.InboundContext{}, inbound.newConnection, inbound.newPacketConnection, inbound),
 			ntp.TimeFuncFromContext(ctx),
 		)
+		inbound.serverPassword = options.Password
 	} else if common.Contains(shadowaead.List, options.Method) {
 		service, err = shadowaead.NewMultiService[int](
 			options.Method,
@@ -97,6 +102,8 @@ func newMultiInbound(ctx context.Context, router adapter.Router, logger log.Cont
 	}
 	inbound.service = service
 	inbound.users = options.Users
+	inbound.method = options.Method
+	inbound.subscriptionPort = options.ListenPort
 	inbound.listener = listener.New(listener.Options{
 		Context:                  ctx,
 		Logger:                   logger,
@@ -123,6 +130,30 @@ func (h *MultiInbound) Start(stage adapter.StartStage, scope *adapter.Scope) err
 
 func (h *MultiInbound) SetTracker(tracker adapter.SSMTracker) {
 	h.tracker = tracker
+}
+
+func (h *MultiInbound) QuotaUsers() []adapter.QuotaUser {
+	h.usersAccess.RLock()
+	defer h.usersAccess.RUnlock()
+	var result []adapter.QuotaUser
+	for _, u := range h.users {
+		quotaBytes := int64(0)
+		if u.QuotaBytes != nil {
+			quotaBytes = int64(u.QuotaBytes.Value())
+		}
+		if quotaBytes > 0 || u.Admin {
+			result = append(result, adapter.QuotaUser{
+				Name:             u.Name,
+				QuotaBytes:       quotaBytes,
+				Admin:            u.Admin,
+				Method:           h.method,
+				ServerPassword:   h.serverPassword,
+				UserPassword:     u.Password,
+				SubscriptionPort: h.subscriptionPort,
+			})
+		}
+	}
+	return result
 }
 
 func (h *MultiInbound) UpdateUsers(users []string, uPSKs []string) error {
