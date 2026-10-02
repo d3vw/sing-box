@@ -1,5 +1,7 @@
 package option
 
+import "github.com/sagernet/sing/common/byteformats"
+
 type VLESSInboundOptions struct {
 	ListenOptions
 	Users []VLESSUser `json:"users,omitempty"`
@@ -9,9 +11,11 @@ type VLESSInboundOptions struct {
 }
 
 type VLESSUser struct {
-	Name string `json:"name"`
-	UUID string `json:"uuid"`
-	Flow string `json:"flow,omitempty"`
+	Name       string                   `json:"name"`
+	UUID       string                   `json:"uuid"`
+	Flow       string                   `json:"flow,omitempty"`
+	QuotaBytes *byteformats.MemoryBytes `json:"quota_bytes,omitempty"`
+	Admin      bool                     `json:"admin,omitempty"`
 }
 
 type VLESSOutboundOptions struct {

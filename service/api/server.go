@@ -33,6 +33,7 @@ type Service struct {
 	listener  *listener.Listener
 	tlsConfig tls.ServerConfig
 	dashboard *dashboard
+	handler   http.Handler
 }
 
 func NewService(ctx context.Context, logger log.ContextLogger, tag string, options option.APIServiceOptions) (adapter.Service, error) {
@@ -82,9 +83,17 @@ func (s *Service) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 		}
 		scope.Add(s.dashboard.close)
 	}
+	handler := h2c.NewHandler(newHTTPHandler(s.logger, grpcServer, s.options, s.dashboard), new(http2.Server)) //nolint:staticcheck
+	s.handler = handler
+	scope.Add(func() error {
+		s.handler = nil
+		return nil
+	})
+	if s.options.ListenPort == 0 && s.options.Listen == nil {
+		return nil
+	}
 	httpServer := &http.Server{
-		//nolint:staticcheck
-		Handler: h2c.NewHandler(newHTTPHandler(s.logger, grpcServer, s.options, s.dashboard), new(http2.Server)),
+		Handler: handler,
 		BaseContext: func(net.Listener) context.Context {
 			return ctx
 		},
@@ -118,4 +127,28 @@ func (s *Service) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 		}
 	}()
 	return nil
+}
+
+func (s *Service) Handler() http.Handler {
+	return s.handler
+}
+
+func (s *Service) APIURL() string {
+	l := s.listener.TCPListener()
+	if l == nil {
+		return ""
+	}
+	addr := l.Addr().String()
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return ""
+	}
+	if host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	scheme := "http"
+	if s.tlsConfig != nil {
+		scheme = "https"
+	}
+	return scheme + "://" + net.JoinHostPort(host, port)
 }

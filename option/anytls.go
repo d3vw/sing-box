@@ -1,6 +1,9 @@
 package option
 
-import "github.com/sagernet/sing/common/json/badoption"
+import (
+	"github.com/sagernet/sing/common/byteformats"
+	"github.com/sagernet/sing/common/json/badoption"
+)
 
 type AnyTLSInboundOptions struct {
 	ListenOptions
@@ -10,8 +13,10 @@ type AnyTLSInboundOptions struct {
 }
 
 type AnyTLSUser struct {
-	Name     string `json:"name,omitempty"`
-	Password string `json:"password,omitempty"`
+	Name       string                   `json:"name,omitempty"`
+	Password   string                   `json:"password,omitempty"`
+	QuotaBytes *byteformats.MemoryBytes `json:"quota_bytes,omitempty"`
+	Admin      bool                     `json:"admin,omitempty"`
 }
 
 type AnyTLSOutboundOptions struct {
