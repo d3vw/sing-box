@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>{{.Title}} — 流量配额</title>
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#e3e5e1">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f1112">
+<script>try{var t=localStorage.getItem("quota-theme");if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";var r=document.documentElement;r.dataset.theme=t;if(localStorage.getItem("quota-language")==="en")r.lang="en";if(!sessionStorage.getItem("quota-intro")){r.classList.add("intro");sessionStorage.setItem("quota-intro","1")}}catch(e){}</script>
+<style>
+:root{
+  --sans:"Noto Sans SC","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --num:"Archivo","Inter",system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  --page:#e3e5e1;--seg:#d6d9d4;--seg-on:#fafaf8;--seg-soft:#eceeea;
+  --ink:#16191c;--ink2:#3e4640;--mute:#575f59;--mute2:#5b625c;--faint:#5b625c;--line:#cfd3cd;
+  --panel:#fafaf8;--panel-border:#d2d5cf;--zone2:#f0f1ee;--zone-line:#e2e4e0;
+  --row:#fafaf8;--row-border:#dde0db;--row-div:#e8eae6;--chip2:#e6e8e4;
+  --tick:#b9beb7;--tick-major:#6f7770;
+  --accent:oklch(0.5 0.16 262);--accent-text:oklch(0.45 0.16 262);--fill:oklch(0.6 0.13 262 / 0.18);
+  --btn-bg:#16191c;--btn-fg:#fafaf8;--btn-border:#c9cdc7;
+  --ok:#2f5e44;--ok-dot:oklch(0.66 0.16 150);--warn:#7a5a10;--warn-dot:oklch(0.75 0.15 80);
+  --err:#9a2f24;--err-dot:oklch(0.62 0.19 28);--idle-dot:#b5bab4;
+  --focus:#e9ece8;--shadow:0 24px 48px -32px rgba(30,40,35,.35);--hl:#fff;
+  --up:oklch(0.6 0.13 205);--down:oklch(0.6 0.13 262);--bar:rgba(227,229,225,.94);
+  --switch-on:oklch(0.5 0.16 262);--switch-off:#c9cdc7;
+  --heat-empty:#e9ebe7;--heat-future:#d9dcd7;--label-faint:#5b625c;
+  --heat-l0:0.86;--heat-ld:-0.4;--heat-c0:0.06;--heat-cd:0.1;
+  --pop-shadow:0 12px 32px -8px rgba(0,0,0,.25);
+}
+[data-theme="dark"]{
+  --page:#0f1112;--seg:#1c1f21;--seg-on:#34393c;--seg-soft:#1c1f21;
+  --ink:#e8eae6;--ink2:#b4bbb5;--mute:#8e968f;--mute2:#828a84;--faint:#828a84;--line:#34393b;
+  --panel:#17191b;--panel-border:#2a2e30;--zone2:#1b1e20;--zone-line:#272b2d;
+  --row:#141618;--row-border:#2c3032;--row-div:#24282a;--chip2:#2a2e31;
+  --tick:#3e4446;--tick-major:#7a827c;
+  --accent:oklch(0.74 0.13 262);--accent-text:oklch(0.8 0.11 262);--fill:oklch(0.74 0.13 262 / 0.16);
+  --btn-bg:#e8eae6;--btn-fg:#121415;--btn-border:#3a3f42;
+  --ok:oklch(0.8 0.12 150);--warn:oklch(0.82 0.12 80);--err:oklch(0.8 0.11 28);--err-dot:oklch(0.68 0.17 28);--idle-dot:#5c635e;
+  --focus:#24282a;--shadow:0 24px 48px -28px rgba(0,0,0,.8);--hl:rgba(255,255,255,.04);
+  --up:oklch(0.74 0.12 205);--down:oklch(0.74 0.12 262);--bar:rgba(15,17,18,.92);
+  --switch-on:oklch(0.66 0.14 262);--switch-off:#3a3f42;
+  --heat-empty:#232729;--heat-future:#33383a;--label-faint:#828a84;
+  --heat-l0:0.36;--heat-ld:0.44;--heat-c0:0.06;--heat-cd:0.08;
+  color-scheme:dark;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--page)}
+body{background:var(--page);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.4}
+::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none}
+button:disabled{cursor:default}
+button:focus-visible,a:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input:focus{outline:none;background:var(--focus)}
+a{color:inherit;text-decoration:none}
+[hidden]{display:none!important}
+.num{font-family:var(--num);font-variant-numeric:tabular-nums}
+b{font-weight:600}
+.strong{font-family:var(--num);font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+.accent{font-weight:600;color:var(--accent-text)}
+
+@keyframes rise{from{transform:scaleY(0)}}
+@keyframes fade-in{from{opacity:0}}
+@keyframes sweep{from{width:0}}
+@keyframes slide{from{left:0}}
+@keyframes pop{from{opacity:0;scale:.5}}
+@keyframes pulse{50%{opacity:.5}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes enter{from{opacity:0;translate:0 -4px;scale:.97}}
+
+.shell{container-type:inline-size;min-height:100dvh}
+.pg{max-width:1440px;margin:0 auto;min-height:100dvh;display:flex;flex-direction:column;gap:16px;padding:clamp(16px,2.6cqi,32px)}
+
+/* 顶栏 */
+.hd{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 24px}
+.hd-l{display:flex;min-width:0;align-items:center;gap:12px}
+.hd-title{font-size:15px;font-weight:600;white-space:nowrap}
+.hd-meta{display:flex;min-width:0;align-items:center;gap:12px}
+.hd-div{width:1px;height:16px;flex-shrink:0;background:var(--line)}
+.hd-node{font-family:var(--num);font-size:15px;font-weight:600;font-stretch:105%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tag{flex-shrink:0;border:1px solid var(--line);border-radius:6px;padding:2px 7px;font-family:var(--num);font-size:12px;font-weight:500;color:var(--mute);white-space:nowrap}
+.status{display:flex;flex-shrink:0;align-items:center;gap:6px;font-size:13px;white-space:nowrap}
+.status i{width:8px;height:8px;border-radius:50%}
+.status.ok{color:var(--ok)}
+.status.ok i{background:var(--ok-dot);box-shadow:0 0 0 3px oklch(0.66 0.16 150 / .2)}
+.status.bad{color:var(--err)}
+.status.bad i{background:var(--err-dot)}
+.hd-r{position:relative;display:flex;align-items:center;gap:12px}
+.ctl{display:flex;align-items:center;gap:12px}
+.ctl-l{display:none}
+.menu-btn{display:none}
+.upd{font-size:12px;white-space:nowrap;color:var(--mute2)}
+.upd .err{color:var(--err)}
+.upd button{min-height:28px;padding:0 6px;font-weight:600;color:var(--accent-text);text-underline-offset:3px}
+.upd button:hover{text-decoration:underline}
+.upd-m{display:none}
+.seg{position:relative;display:grid;grid-auto-columns:1fr;grid-auto-flow:column;border-radius:10px;background:var(--seg);padding:3px}
+.seg>i{position:absolute;top:3px;bottom:3px;left:3px;width:calc((100% - 6px) / 2);border-radius:8px;background:var(--seg-on);box-shadow:0 1px 2px rgba(0,0,0,.12);transition:transform .2s cubic-bezier(.3,.7,.4,1)}
+.seg button{position:relative;border-radius:8px;padding:6px 12px;font-size:13px;font-weight:500;white-space:nowrap;color:var(--mute);transition:color .15s}
+.seg button:hover,.seg button[aria-checked="true"]{color:var(--ink)}
+.pill{display:inline-flex;align-items:center;min-height:32px;border:1px solid var(--line);border-radius:10px;padding:0 12px;font-size:13px;font-weight:500;white-space:nowrap}
+.pill:hover{background:var(--seg-soft)}
+
+/* 卡片 */
+.card{display:flex;flex-wrap:wrap;overflow:hidden;border-radius:20px;border:1px solid var(--panel-border);background:var(--panel);box-shadow:inset 0 1px 0 var(--hl),var(--shadow)}
+.main{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:28px;padding:clamp(20px,2.6cqi,32px)}
+.side{flex:1 1 340px;min-width:0;display:flex;flex-direction:column;gap:20px;background:var(--zone2);border-left:1px solid var(--zone-line);padding:clamp(20px,2.6cqi,32px) clamp(20px,2.4cqi,30px)}
+@media (max-width:920px){.side{border-left:0;border-top:1px solid var(--zone-line)}}
+
+/* 剩余 */
+.top{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:20px}
+.remain{display:flex;flex-direction:column;gap:2px}
+.remain-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px}
+.lbl{font-size:13px;color:var(--mute)}
+.remain-v{display:flex;align-items:baseline;gap:8px}
+.remain-n{font-size:clamp(60px,7.5cqi,104px);line-height:.95;font-weight:600;letter-spacing:-.02em;font-stretch:118%}
+.remain-u{font-size:clamp(20px,2.2cqi,28px);font-weight:500;color:var(--mute)}
+.reset-line{margin-top:8px;font-size:14px;color:var(--mute)}
+
+/* 预测标签 */
+.fc-tag.fc-m{display:none}
+.fc-d{position:relative;flex-shrink:0}
+.fc-tag{display:inline-flex;flex-shrink:0;align-items:baseline;gap:7px;border-radius:999px;padding:5px 10px;font-size:13px;white-space:nowrap;transition:background-color .15s}
+.fc-tag .dot{width:7px;height:7px;flex-shrink:0;align-self:center;border-radius:50%}
+.fc-tag .fc-t{font-weight:600}
+.fc-tag .fc-x{font-family:var(--num);color:var(--ink2);font-variant-numeric:tabular-nums}
+.fc-tag svg{width:14px;height:14px;flex-shrink:0;align-self:center;color:var(--mute)}
+.fc-tag.ok{background:color-mix(in oklab,var(--ok-dot) 10%,transparent)}
+.fc-tag.ok:hover,.fc-tag.ok[aria-expanded="true"]{background:color-mix(in oklab,var(--ok-dot) 18%,transparent)}
+.fc-tag.ok .dot{background:var(--ok-dot)}.fc-tag.ok .fc-t{color:var(--ok)}
+.fc-tag.warn{background:color-mix(in oklab,var(--warn-dot) 12%,transparent)}
+.fc-tag.warn:hover,.fc-tag.warn[aria-expanded="true"]{background:color-mix(in oklab,var(--warn-dot) 20%,transparent)}
+.fc-tag.warn .dot{background:var(--warn-dot)}.fc-tag.warn .fc-t{color:var(--warn)}
+.fc-tag.err{background:color-mix(in oklab,var(--err-dot) 10%,transparent)}
+.fc-tag.err:hover,.fc-tag.err[aria-expanded="true"]{background:color-mix(in oklab,var(--err-dot) 18%,transparent)}
+.fc-tag.err .dot{background:var(--err-dot)}.fc-tag.err .fc-t{color:var(--err)}
+.fc-basis{border-radius:14px;border:1px solid var(--panel-border);background:var(--panel);padding:14px 16px;font-size:13px;line-height:1.55;color:var(--mute);animation:enter .15s ease-out}
+.fc-pop{position:absolute;top:100%;right:0;z-index:30;width:290px;margin-top:10px;box-shadow:inset 0 1px 0 var(--hl),var(--shadow)}
+.fc-basis-m{margin-top:12px}
+
+/* 刻度尺 */
+.ruler{display:flex;flex-direction:column;gap:8px}
+.rl-track{position:relative;height:30px}
+.rl-track i{position:absolute;bottom:0;display:block}
+.rl-minor{left:0;right:0;height:8px;background:repeating-linear-gradient(90deg,var(--tick) 0 1px,transparent 1px 2.5%)}
+.rl-major{left:0;right:0;height:16px;background:repeating-linear-gradient(90deg,var(--tick-major) 0 1.5px,transparent 1.5px 25%)}
+.rl-end{right:0;height:16px;width:1.5px;background:var(--tick-major)}
+.rl-base{left:0;right:0;height:1px;background:var(--tick)}
+.rl-up{left:0;height:6px;width:var(--pu);background:var(--up)}
+.rl-down{left:var(--pu);height:6px;width:calc(var(--p) - var(--pu));background:var(--down)}
+.rl-ptr{left:var(--p);height:30px;width:3px;margin-left:-1px;border-radius:2px;background:var(--accent)}
+.rl-label{position:absolute;top:-2px;left:var(--p);margin-left:10px;font-family:var(--num);font-size:13px;font-weight:600;white-space:nowrap;color:var(--accent-text);font-variant-numeric:tabular-nums}
+.rl-label.flip{left:auto;right:calc(100% - var(--p));margin:0 10px 0 0}
+.ruler.warn .rl-ptr{background:var(--warn-dot)}.ruler.warn .rl-label{color:var(--warn)}
+.ruler.err .rl-ptr{background:var(--err-dot)}.ruler.err .rl-label{color:var(--err)}
+.rl-ticks{position:relative;height:16px;font-family:var(--num);font-size:12px;font-weight:500;color:var(--mute2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.rl-ticks span{position:absolute}
+.rl-ticks span:nth-child(1){left:0}
+.rl-ticks span:nth-child(2){left:25%;transform:translateX(-50%)}
+.rl-ticks span:nth-child(3){left:50%;transform:translateX(-50%)}
+.rl-ticks span:nth-child(4){left:75%;transform:translateX(-50%)}
+.rl-ticks span:nth-child(5){right:0}
+.ud{display:flex;flex-wrap:wrap;gap:4px 20px;margin-top:6px;font-size:13px;color:var(--mute)}
+.ud>span{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.ud i{width:8px;height:8px;border-radius:2px}
+.intro .rl-up,.intro .rl-down{animation:sweep .9s cubic-bezier(.2,.7,.2,1) backwards}
+.intro .rl-down{animation-name:fade-in}
+.intro .rl-ptr{animation:slide .9s cubic-bezier(.2,.7,.2,1) backwards}
+.intro .rl-label{animation:fade-in .4s ease-out .6s backwards}
+
+/* 图表 */
+.charts-wrap{container-type:inline-size}
+.charts{display:grid;gap:32px 40px;border-top:1px solid var(--zone-line);padding-top:24px}
+@container (min-width:760px){.charts{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+.chart{position:relative;display:flex;min-width:0;flex-direction:column;gap:12px}
+.sec-hd{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.sec-hd h2{font-size:15px;font-weight:600}
+.sec-sub{font-size:12px;color:var(--mute2)}
+.tip{position:absolute;z-index:20;display:flex;width:max-content;flex-direction:column;gap:2px;pointer-events:none;border-radius:10px;border:1px solid var(--panel-border);background:var(--panel);padding:8px 12px;box-shadow:0 10px 28px -10px rgba(0,0,0,.3);transition:left .1s ease-out,right .1s ease-out,top .1s ease-out}
+.tip-t{font-size:12px;white-space:nowrap;color:var(--mute)}
+.tip-v{font-family:var(--num);font-size:15px;line-height:1.25;font-weight:600;font-variant-numeric:tabular-nums}
+.tip-n{font-size:12px;white-space:nowrap;color:var(--mute)}
+.tip-n.warn{color:var(--warn)}
+
+.stats{display:grid;grid-auto-flow:column;justify-content:start;column-gap:20px}
+.stat{display:flex;flex-direction:column;gap:2px;margin:0 -8px;border-radius:8px;padding:4px 8px;cursor:default;outline:none;transition:background-color .15s;-webkit-tap-highlight-color:transparent}
+.stat:hover,.stat:focus-visible,.stat.on{background:var(--seg-soft)}
+.stat-l{font-size:12px;color:var(--mute)}
+.stat-v{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:6px}
+.stat-v b{font-family:var(--num);font-size:18px;line-height:1.25;white-space:nowrap;font-variant-numeric:tabular-nums}
+.stat-v span{font-size:12px;white-space:nowrap;color:var(--mute)}
+.bars{position:relative;display:grid;min-height:120px;flex:1;grid-template-columns:repeat(var(--n),minmax(0,1fr));column-gap:3px;align-items:end;border-radius:4px;outline:none;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.bars:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.bar{display:flex;height:100%;align-items:flex-end;border-radius:3px;transition:background-color .1s}
+.bar.on{background:color-mix(in oklab,var(--ink) 7%,transparent)}
+.bar i{display:block;width:100%;transform-origin:bottom;border-radius:2px 2px 0 0;background:color-mix(in oklab,var(--down) 55%,transparent);transition:opacity .15s,background-color .15s}
+.bar.on i{background:var(--down)}
+.bar.hot i{background:var(--warn-dot)}
+.bar.today i{background:repeating-linear-gradient(135deg,var(--down) 0 1.5px,transparent 1.5px 4px);box-shadow:inset 0 0 0 1px var(--down)}
+.bar.dim i{opacity:.25}
+.intro .bar i{animation:rise .55s cubic-bezier(.2,.7,.2,1) backwards;animation-delay:calc(var(--i) * 14ms)}
+.bl{position:absolute;left:0;right:0;pointer-events:none;border-top:1.5px dashed var(--ink2)}
+.bl>span{position:absolute;bottom:4px;border-radius:5px;background:color-mix(in oklab,var(--panel) 90%,transparent);padding:0 6px;font-size:11px;line-height:18px;white-space:nowrap;color:var(--ink2);transition:opacity .15s}
+.bl b{font-family:var(--num)}
+.bl.budget>span{right:0}
+.bars.tipping .bl.budget>span{opacity:0}
+.bl.avg{border-top-style:dotted;border-color:var(--accent);opacity:0;transition:opacity .15s}
+.bl.avg>span{left:0;color:var(--accent-text)}
+.bars.avg-on .bl.avg{opacity:1}
+.axis{display:flex;justify-content:space-between;font-size:11px;color:var(--mute2)}
+
+.c{display:block;border-radius:4px;transition:opacity .15s}
+.c.empty{background:var(--heat-empty)}
+.c.heat{background:oklch(calc(var(--heat-l0) + var(--t,0) * var(--heat-ld)) calc(var(--heat-c0) + var(--t,0) * var(--heat-cd)) 262)}
+.c.future{background:transparent;box-shadow:inset 0 0 0 1px var(--heat-future)}
+.c.sel{box-shadow:inset 0 0 0 2px var(--ink)}
+.c.dim{opacity:.25}
+.intro .c{animation:fade-in .4s ease-out backwards;animation-delay:calc(var(--c,0) * 25ms)}
+.legend{display:flex;align-items:center;gap:5px;font-size:12px;white-space:nowrap;color:var(--mute2)}
+.legend .c{width:10px;height:10px;border-radius:2px;animation:none}
+.peak-sub{font-size:13px;line-height:1.5;color:var(--mute)}
+.peak{margin:0 -2px;border-radius:4px;padding:0 2px;font-weight:600;color:var(--accent-text);text-decoration:underline dotted color-mix(in oklab,var(--accent) 50%,transparent);text-underline-offset:3px;cursor:default;outline:none;transition:background-color .15s}
+.peak:hover,.peak:focus-visible,.peak[aria-pressed="true"]{background:color-mix(in oklab,var(--accent) 12%,transparent)}
+button.peak{margin:-8px -2px;padding:8px 2px;font-size:inherit;-webkit-tap-highlight-color:transparent}
+.hm-grid{position:relative;display:grid;margin-top:4px;grid-template-columns:minmax(30px,max-content) repeat(12,minmax(0,1fr));align-items:center;gap:3px;border-radius:4px;outline:none}
+.hm-grid:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.hm-grid .c{height:22px}
+.hm-day{padding-right:6px;font-size:12px;white-space:nowrap;color:var(--mute2);transition:color .1s}
+.hm-day.today,.hm-day.hl{font-weight:600;color:var(--ink)}
+.hm-hr{padding-top:2px;text-align:center;font-size:12px;font-weight:500;color:var(--faint);transition:color .1s}
+.hm-hr.cur,.hm-hr.hl{font-weight:600;color:var(--ink)}
+.hm-grid.peak-on .hm-hr.pk{font-weight:600;color:var(--accent-text)}
+.hm-m{display:none}
+
+/* 侧栏 */
+.sec-title{font-size:15px;font-weight:600;white-space:nowrap}
+.ob{display:flex;flex-direction:column;gap:20px}
+.ob-head{display:flex;flex-direction:column;gap:4px}
+.ob-note{font-size:13px;line-height:1.5;color:var(--mute)}
+.ob-note b{font-family:var(--num);color:var(--ink2);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.ob-form{display:flex;flex-direction:column;gap:20px}
+.group{display:flex;flex-direction:column;border-radius:14px;border:1px solid var(--row-border);background:var(--row)}
+.row{display:flex;min-height:48px;align-items:center;justify-content:space-between;gap:12px;padding:6px 8px 6px 16px;font-size:14px;color:var(--ink2)}
+.row+.row{border-top:1px solid var(--row-div)}
+.row>span:first-child{width:80px;flex-shrink:0;white-space:nowrap}
+.row input:not([type=checkbox]){min-width:0;flex:1;border:0;border-radius:7px;background:transparent;padding:8px 10px;text-align:right;font-family:var(--num);font-size:15px;font-weight:500;color:var(--ink);transition:background-color .15s}
+.row input::placeholder{font-weight:400;color:var(--mute2)}
+.row input[aria-invalid="true"]{color:var(--err)}
+.pw{display:flex;min-width:0;flex:1;align-items:center;justify-content:flex-end;gap:4px}
+.chip{flex-shrink:0;border-radius:7px;background:var(--chip2);color:var(--ink2);padding:6px 10px;font-size:13px;font-weight:500;white-space:nowrap;transition:color .15s}
+.chip:hover{color:var(--ink)}
+.sel{position:relative;min-width:0;flex:1}
+.sel-btn{display:flex;width:100%;align-items:center;justify-content:flex-end;gap:6px;border-radius:7px;padding:8px 10px;font-family:var(--num);font-size:15px;font-weight:500;color:var(--ink)}
+.sel-btn[aria-expanded="true"]{background:var(--focus)}
+.sel-btn svg{flex-shrink:0;color:var(--mute2);transition:transform .15s}
+.sel-btn[aria-expanded="true"] svg{transform:rotate(180deg)}
+.sel-list{position:absolute;right:0;top:calc(100% + 6px);z-index:40;display:flex;width:max-content;min-width:100%;flex-direction:column;gap:2px;list-style:none;border-radius:12px;border:1px solid var(--panel-border);background:var(--panel);padding:4px;box-shadow:var(--pop-shadow);outline:none;animation:enter .15s ease-out}
+.sel.up .sel-list{top:auto;bottom:calc(100% + 6px)}
+.sel-list li{display:flex;min-height:40px;align-items:center;gap:8px;cursor:pointer;border-radius:8px;padding:8px 12px 8px 10px;font-family:var(--num);font-size:15px;font-weight:500;color:var(--ink)}
+.sel-list li.act{background:var(--seg-soft)}
+.sel-list li[aria-selected="true"]{font-weight:600}
+.sel-list li svg{flex-shrink:0;color:var(--accent-text);visibility:hidden}
+.sel-list li[aria-selected="true"] svg{visibility:visible}
+.row.sw{cursor:pointer;padding-right:16px;transition:background-color .15s}
+.row.sw:hover{background:var(--seg-soft)}
+.group .row.sw:first-child{border-radius:13px 13px 0 0}
+.group .row.sw:last-child{border-radius:0 0 13px 13px}
+.sw-t{display:flex;min-width:0;flex:1;flex-direction:column;gap:2px;padding:8px 0;width:auto!important;white-space:normal!important}
+.hint{font-size:12px;color:var(--mute)}
+.sw input{position:absolute;opacity:0;width:0;height:0}
+.switch{flex-shrink:0;display:flex;align-items:center;width:38px;height:22px;border-radius:999px;padding:2px;background:var(--switch-off);transition:background-color .2s}
+.switch::after{content:"";width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform .2s cubic-bezier(.3,1.4,.5,1)}
+.sw input:checked+.switch{background:var(--switch-on)}
+.sw input:checked+.switch::after{transform:translateX(16px)}
+.sw input:focus-visible+.switch{outline:2px solid var(--accent);outline-offset:2px}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.st-row{grid-column:1/-1;display:flex;min-height:32px;align-items:center;justify-content:space-between;gap:12px;font-size:13px}
+.st{display:flex;min-width:0;align-items:center;gap:8px;color:var(--mute2)}
+.st i{width:6px;height:6px;flex-shrink:0;border-radius:50%;background:var(--idle-dot)}
+.st .why{color:var(--mute)}
+.st.testing{color:var(--warn)}.st.testing i{background:var(--warn-dot);animation:pulse 1s ease-in-out infinite}
+.st.ok{color:var(--ok)}.st.ok i{background:var(--ok-dot);animation:pop .3s cubic-bezier(.3,1.5,.5,1)}
+.st.fail{color:var(--err)}.st.fail i{background:var(--err-dot);animation:pop .3s cubic-bezier(.3,1.5,.5,1)}
+.unsaved{display:flex;flex-shrink:0;align-items:center;gap:6px;white-space:nowrap;color:var(--warn)}
+.unsaved .sep{color:var(--line)}
+.link{min-height:32px;padding:0 4px;font-size:13px;font-weight:600;color:var(--accent-text);text-underline-offset:3px}
+.link:hover{text-decoration:underline}
+.btn-sec,.btn-pri{display:inline-flex;height:46px;align-items:center;justify-content:center;gap:8px;border-radius:11px;font-size:14px;font-weight:600;white-space:nowrap;transition:scale .15s ease-out,background-color .15s,border-color .15s,color .15s,opacity .15s}
+.btn-sec{border:1px solid var(--btn-border);color:var(--ink)}
+.btn-sec:enabled:hover{background:var(--seg-soft)}
+.btn-sec:disabled{color:var(--mute2)}
+.btn-pri{border:1px solid transparent;background:var(--btn-bg);color:var(--btn-fg)}
+.btn-pri:enabled:hover{opacity:.85}
+.btn-pri:disabled{background:var(--chip2);color:var(--mute2)}
+.btn-sec:enabled:active,.btn-pri:enabled:active{scale:.97}
+.spin{width:14px;height:14px;flex-shrink:0;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;animation:spin .8s linear infinite}
+.check{width:14px;height:14px;flex-shrink:0;animation:pop .3s cubic-bezier(.3,1.5,.5,1)}
+.link-danger{font-size:12px;color:var(--mute2);padding:0}
+.link-danger:hover{color:var(--err)}
+.sub{align-items:center;gap:12px;padding:16px}
+.qr{width:160px;height:160px;border-radius:12px;background:#fff;padding:10px}
+.sub-hint{font-size:12px;color:var(--mute2);text-align:center}
+.sub .btn-sec{width:100%}
+
+.users{display:flex;flex-direction:column;gap:12px;border-radius:20px;border:1px solid var(--panel-border);background:var(--panel);padding:clamp(20px,3cqi,28px)}
+.urow{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) auto;align-items:center;gap:16px;padding:10px 12px 10px 16px}
+.urow+.urow{border-top:1px solid var(--row-div)}
+.u-name{display:flex;align-items:center;gap:8px;min-width:0}
+.u-user{font-family:var(--num);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.u-blk{font-size:12px;color:var(--err);white-space:nowrap}
+.u-usage{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--ink2)}
+.u-bar{height:4px;border-radius:2px;background:var(--heat-empty);overflow:hidden}
+.u-bar i{display:block;height:100%;width:var(--p);background:var(--accent)}
+.msg .card{display:block;padding:24px;font-size:14px;color:var(--ink2);line-height:1.6}
+
+.toasts{position:fixed;right:0;bottom:0;z-index:50;display:flex;flex-direction:column;align-items:flex-end;gap:8px;padding:0 24px 24px;pointer-events:none}
+.toast{display:flex;width:100%;max-width:380px;align-items:center;gap:12px;pointer-events:auto;border-radius:14px;border:1px solid var(--panel-border);background:var(--panel);padding:8px 8px 8px 16px;box-shadow:0 8px 24px rgba(0,0,0,.12);animation:enter .2s ease-out}
+.toast>i{width:8px;height:8px;flex-shrink:0;border-radius:50%;background:var(--ok-dot)}
+.toast.err>i{background:var(--err-dot)}
+.toast-b{display:flex;min-width:0;flex:1;flex-direction:column;padding:4px 0}
+.toast-b b{font-size:14px}
+.toast-b span{font-size:13px;color:var(--mute);overflow-wrap:anywhere}
+.toast .link{min-height:32px;flex-shrink:0;padding:0 12px}
+.toast-x{display:flex;width:32px;height:32px;flex-shrink:0;align-items:center;justify-content:center;border-radius:8px;color:var(--mute)}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+
+@media (max-width:767px){
+  .pg{padding:0;gap:0}
+  .hd{flex-wrap:nowrap;gap:12px;padding:18px 20px 8px}
+  .hd-l{flex-direction:column;align-items:flex-start;gap:4px}
+  .hd-title{font-size:22px;line-height:1.25;font-weight:700}
+  .hd-meta{gap:6px;font-size:13px;color:var(--mute);max-width:100%}
+  .hd-div{display:none}
+  .hd-node{font-size:13px;font-weight:500;font-stretch:100%;color:var(--ink2)}
+  .hd-meta .tag{border:0;padding:0;font-size:13px;font-weight:400}
+  .hd-meta .tag::before,.hd-meta .status::before{content:"·";margin-right:6px;color:var(--mute)}
+  .hd-meta .status{gap:6px}
+  .hd-meta .status i{width:6px;height:6px;box-shadow:none}
+  .hd-r .upd{display:none}
+  .menu-btn{display:grid;width:44px;height:44px;place-items:center;border-radius:50%;border:1px solid var(--line);color:var(--ink);transition:scale .15s,background-color .15s}
+  .menu-btn:active{scale:.95}
+  .menu-btn[aria-expanded="true"]{background:var(--seg)}
+  .ctl{display:none;position:absolute;top:calc(100% + 8px);right:0;z-index:40;width:256px;flex-direction:column;align-items:stretch;gap:12px;border-radius:14px;border:1px solid var(--panel-border);background:var(--panel);padding:12px;box-shadow:var(--pop-shadow);animation:enter .15s ease-out}
+  .ctl.open{display:flex}
+  .ctl-row{display:flex;align-items:center;justify-content:space-between;gap:16px}
+  .ctl-l{display:inline;font-size:13px;color:var(--mute)}
+  .ctl .seg button{min-height:36px}
+  .ctl .pill{width:100%;justify-content:center;min-height:40px}
+  .card{display:flex;flex-direction:column;flex-wrap:nowrap;overflow:visible;border:0;border-radius:0;background:none;box-shadow:none}
+  .main{padding:12px 20px 0;gap:22px}
+  .fc-d{display:none}
+  .fc-tag.fc-m{display:inline-flex}
+  .remain-head{margin-bottom:2px}
+  .remain-v{gap:6px}
+  .remain-n{font-size:clamp(56px,19.5vw,76px);font-stretch:115%}
+  .remain-u{font-size:22px}
+  .rl-minor{height:7px;background:repeating-linear-gradient(90deg,var(--tick) 0 1px,transparent 1px 5%)}
+  .rl-major,.rl-end{height:14px}
+  .rl-label,.rl-label.flip{left:var(--p);right:auto;margin:0 0 0 9px}
+  .rl-label.flip-m{left:auto;right:calc(100% - var(--p));margin:0 9px 0 0}
+  .charts-wrap{container-type:normal}
+  .charts{display:flex;flex-direction:column;gap:22px;border:0;padding:0}
+  .chart{border-radius:14px;border:1px solid var(--panel-border);background:var(--panel);padding:16px}
+  .bars{flex:none;height:132px;min-height:0}
+  .hm{display:none}
+  .hm-m{display:flex}
+  .hm-m .sec-hd+.peak-sub{margin-top:-8px}
+  .pick{display:flex;min-height:40px;flex-direction:column;justify-content:center;gap:2px;border-radius:10px;background:var(--seg-soft);padding:8px 12px}
+  .pick-l{font-size:12px;color:var(--mute)}
+  .pick-v{display:flex;align-items:baseline;gap:8px}
+  .pick-v b{font-family:var(--num);font-size:17px;font-variant-numeric:tabular-nums}
+  .pick-v span{font-size:12px;color:var(--mute)}
+  .hmm-grid{display:grid;grid-template-columns:22px repeat(7,minmax(0,1fr));align-items:center;column-gap:4px;row-gap:3px}
+  .hmm-hours{display:flex;flex-direction:column;gap:3px}
+  .hmm-hours span{height:21px;font-size:11px;font-weight:500;line-height:21px;color:var(--faint)}
+  .hmm-hours span.cur,.hmm-hours span.hl{font-weight:600;color:var(--ink)}
+  .hmm-cells{grid-column:span 7;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));column-gap:4px;row-gap:3px;cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;border-radius:2px;outline:none}
+  .hmm-cells:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .hmm-cells .c{height:21px;width:100%}
+  .hmm-cells .c.sel{box-shadow:0 0 0 2px var(--ink)}
+  .hmm-day{padding-top:6px;text-align:center;font-size:12px;color:var(--mute2)}
+  .hmm-day.today,.hmm-day.hl{font-weight:600;color:var(--ink)}
+  .upd-m{display:flex;justify-content:center;margin-top:-8px}
+  .upd-m button{min-height:44px;margin:-12px 0}
+  .side{border:0;background:none;padding:28px 20px 20px;gap:22px}
+  .ob{gap:10px}
+  .ob-head{padding:6px 4px 0}
+  .ob-form{gap:10px}
+  .group{border-color:var(--panel-border);background:var(--panel)}
+  .row{min-height:50px;padding:4px 8px 4px 16px;font-size:15px}
+  .row input:not([type=checkbox]),.sel-btn{font-size:16px;padding:8px}
+  .chip{border-radius:8px;padding:8px 12px}
+  .row.sw:hover{background:none}
+  .row.sw:active{background:var(--seg-soft)}
+  .hint{font-size:13px}
+  .switch{width:44px;height:26px}
+  .switch::after{width:22px;height:22px}
+  .sw input:checked+.switch::after{transform:translateX(18px)}
+  .actions{position:fixed;left:0;right:0;bottom:0;z-index:10;grid-template-columns:1fr 1.4fr;border-top:1px solid var(--panel-border);background:var(--bar);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);padding:12px 20px max(30px,env(safe-area-inset-bottom));transition:translate .3s cubic-bezier(.2,.7,.2,1),opacity .3s cubic-bezier(.2,.7,.2,1)}
+  body:not(.bar-on) .actions{translate:0 100%;opacity:0;visibility:hidden}
+  .st-row .link{min-height:44px;margin:-6px 0}
+  .btn-sec,.btn-pri{height:50px;border-radius:14px;font-size:15px}
+  .has-actions .pg{padding-bottom:150px}
+  .del-form{padding:0 4px}
+  .users{margin:22px 20px 20px;border-radius:14px;padding:16px}
+  .urow{grid-template-columns:minmax(0,1fr) auto;padding:10px 4px}
+  .u-usage{grid-column:1/-1;grid-row:2}
+  .msg{padding:12px 20px}
+  .toasts{left:0;top:0;bottom:auto;align-items:center;padding:max(12px,env(safe-area-inset-top)) 16px 0}
+  .toast .link{min-height:44px}
+  .toast-x{width:44px;height:44px}
+}
+</style>
+</head>
+<body class="{{if .Outbound}}has-actions{{end}}">
+<div class="shell"><div class="pg">
+<header class="hd">
+  <div class="hd-l">
+    <h1 class="hd-title" data-i18n="title">流量配额</h1>
+    {{with .Self}}
+    <div class="hd-meta">
+      <span class="hd-div" aria-hidden="true"></span>
+      <span class="hd-node">{{.UserName}}</span>
+      <span class="tag">{{.InboundTag}}</span>
+      <span class="status {{if .Blocked}}bad{{else}}ok{{end}}"><i></i><span data-i18n="{{if .Blocked}}blocked{{else}}healthy{{end}}">{{if .Blocked}}已超额{{else}}正常{{end}}</span></span>
+    </div>
+    {{end}}
+  </div>
+  <div class="hd-r">
+    <span class="upd"></span>
+    <div class="ctl" id="ctl" role="group">
+      <div class="ctl-row"><span class="ctl-l" data-i18n="themeLabel">主题</span><div class="seg" role="radiogroup" data-seg="theme"><i aria-hidden="true"></i><button type="button" role="radio" data-v="light" data-i18n="light">浅色</button><button type="button" role="radio" data-v="dark" data-i18n="dark">深色</button></div></div>
+      <div class="ctl-row"><span class="ctl-l" data-i18n="langLabel">语言</span><div class="seg" role="radiogroup" data-seg="lang"><i aria-hidden="true"></i><button type="button" role="radio" data-v="zh">中文</button><button type="button" role="radio" data-v="en">EN</button></div></div>
+      <a class="pill" href="/?ui=classic" data-i18n="classic">经典版</a>
+    </div>
+    <button type="button" class="menu-btn" id="menu-btn" aria-expanded="false" aria-controls="ctl"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
+  </div>
+</header>
+{{with .Message}}<div class="msg">{{.}}</div>{{end}}
+{{with .Self}}
+<div class="card">
+  <section class="main">
+    <div class="top">
+      <div class="remain">
+        <div class="remain-head">
+          <span class="lbl" data-i18n="remaining">剩余</span>
+          {{with $.Forecast}}<button type="button" class="fc-tag fc-m {{.Tone}}" aria-expanded="false" aria-controls="fc-basis-m"><i class="dot"></i><span class="fc-t"></span><span class="fc-x"></span><svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6.3"/><path d="M8 7.2v4" stroke-linecap="round"/><circle cx="8" cy="4.9" r=".6" fill="currentColor" stroke="none"/></svg></button>{{end}}
+        </div>
+        <div class="remain-v num"><span class="remain-n">{{.RemainingGB}}</span><span class="remain-u">GB</span></div>
+        {{with $.Reset}}<span class="reset-line" id="reset-line"></span>{{end}}
+        {{with $.Forecast}}<p class="fc-basis fc-basis-m" id="fc-basis-m" hidden></p>{{end}}
+      </div>
+      {{with $.Forecast}}
+      <div class="fc-d" id="fc-d">
+        <button type="button" class="fc-tag {{.Tone}}" aria-expanded="false" aria-controls="fc-basis-d"><i class="dot"></i><span class="fc-t"></span><span class="fc-x"></span><svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6.3"/><path d="M8 7.2v4" stroke-linecap="round"/><circle cx="8" cy="4.9" r=".6" fill="currentColor" stroke="none"/></svg></button>
+        <p class="fc-basis fc-pop" id="fc-basis-d" hidden></p>
+      </div>
+      {{end}}
+    </div>
+    <div class="ruler {{.Tone}}" style="{{.Ruler}}">
+      <div class="rl-track">
+        <i class="rl-minor"></i><i class="rl-major"></i><i class="rl-end"></i><i class="rl-base"></i><i class="rl-up"></i><i class="rl-down"></i><i class="rl-ptr"></i>
+        <span class="rl-label{{if .Flip}} flip{{end}}{{if .FlipMobile}} flip-m{{end}}" data-i18n="used" data-a="{{.Used}}" data-b="{{.UsedPct}}">已用 {{.Used}} · {{.UsedPct}}%</span>
+      </div>
+      <div class="rl-ticks">{{range .Ticks}}<span>{{.}}</span>{{end}}</div>
+      <div class="ud">
+        <span><i style="background:var(--up)"></i><span data-i18n="upload">上传</span><b class="strong">{{.Upload}}</b></span>
+        <span><i style="background:var(--down)"></i><span data-i18n="download">下载</span><b class="strong">{{.Download}}</b></span>
+      </div>
+    </div>
+    {{if or $.Daily $.Heat}}
+    <div class="charts-wrap"><div class="charts">
+      {{with $.Daily}}
+      <section class="chart daily">
+        <div class="sec-hd"><h2 data-i18n="dailyTitle">每天用量</h2><span class="sec-sub" id="daily-sub"></span></div>
+        <div class="stats">
+          <div class="stat" tabindex="0" data-stat="avg"><span class="stat-l" data-i18n="statAvg">日均</span><span class="stat-v"><b>{{.Avg}}</b></span></div>
+          <div class="stat" tabindex="0" data-stat="peak"><span class="stat-l" data-i18n="statPeak">最多</span><span class="stat-v"><b>{{.PeakValue}}</b></span></div>
+          <div class="stat" tabindex="0" data-stat="today"><span class="stat-l" data-i18n="today">今天</span><span class="stat-v"><b>{{.Today}}</b><span id="vs-today"></span></span></div>
+        </div>
+        <div class="bars" id="bars" role="group" tabindex="0" style="--n:{{len .Bars}}">
+          {{range .Bars}}<div class="bar {{.Class}}"><i style="{{.Style}}"></i></div>{{end}}
+          {{if .Budget}}<div class="bl budget" style="{{.BudgetPos}}" aria-hidden="true"><span><span data-i18n="budgetLabel">每天可用</span> <b>{{.Budget}}</b></span></div>{{end}}
+          <div class="bl avg" style="{{.AvgPos}}" aria-hidden="true"><span><span data-i18n="statAvg">日均</span> <b>{{.Avg}}</b></span></div>
+          <div class="tip" id="bars-tip" role="status" hidden><span class="tip-t"></span><span class="tip-v"></span><span class="tip-n"></span></div>
+        </div>
+        <div class="axis"><span class="num">{{.First}}</span><span class="num">{{.Mid}}</span><span data-i18n="today">今天</span></div>
+      </section>
+      {{end}}
+      {{with $.Heat}}
+      <section class="chart hm">
+        <div class="sec-hd"><h2 data-i18n="heatTitle">高峰时段</h2><span class="legend"><span data-i18n="less">少</span><i class="c empty"></i>{{range .Ramp}}<i class="c heat" style="{{.}}"></i>{{end}}<span data-i18n="more">多</span></span></div>
+        {{if .Insight}}<p class="peak-sub" data-peak-sub="hm-grid"></p>{{end}}
+        <div class="hm-grid" id="hm-grid" role="group" tabindex="0">
+          {{range .Rows}}<span class="hm-day{{if .Today}} today{{end}}" data-wd="{{.Weekday}}"{{if .Today}} data-today{{end}}></span>{{range .Cells}}<div class="c {{.Class}}" style="{{.Style}};--c:{{.Slot}}" data-r="{{.Day}}" data-c="{{.Slot}}" data-v="{{.Value}}" data-sh="{{.Share}}"{{if .Future}} data-f{{end}}></div>{{end}}
+          {{end}}<span></span>{{range .Slots}}<span class="hm-hr{{if .Current}} cur{{end}}{{if .Peak}} pk{{end}}" data-slot="{{.Index}}"></span>{{end}}
+          <div class="tip" id="hm-tip" role="status" hidden><span class="tip-t"></span><span class="tip-v"></span><span class="tip-n"></span></div>
+        </div>
+      </section>
+      <section class="chart hm-m">
+        <div class="sec-hd"><h2 data-i18n="heatTitle">高峰时段</h2><span class="legend"><span data-i18n="less">少</span><i class="c empty"></i>{{range .Ramp}}<i class="c heat" style="{{.}}"></i>{{end}}<span data-i18n="more">多</span></span></div>
+        {{if .Insight}}<p class="peak-sub" data-peak-sub="hmm-cells" data-touch></p>{{end}}
+        <div class="pick" aria-live="polite"><span class="pick-l" id="pick-l"></span><span class="pick-v"><b id="pick-v"></b><span id="pick-s"></span></span></div>
+        <div class="hmm-grid">
+          <div class="hmm-hours">{{range .Slots}}<span class="{{if .Current}}cur{{end}}" data-slot="{{.Index}}"></span>{{end}}</div>
+          <div class="hmm-cells" id="hmm-cells" role="group" tabindex="0">{{range .BySlot}}{{range .}}<div class="c {{.Class}}" style="{{.Style}};--c:{{.Slot}}" data-r="{{.Day}}" data-c="{{.Slot}}" data-v="{{.Value}}" data-sh="{{.Share}}"{{if .Future}} data-f{{end}} aria-hidden="true"></div>{{end}}{{end}}</div>
+          <span></span>{{range .Rows}}<span class="hmm-day{{if .Today}} today{{end}}" data-wd="{{.Weekday}}" data-short{{if .Today}} data-today{{end}}></span>{{end}}
+        </div>
+      </section>
+      {{end}}
+    </div></div>
+    {{end}}
+    <div class="upd upd-m"></div>
+  </section>
+  {{if or $.Subscription $.Outbound}}
+  <section class="side">
+    {{with $.Subscription}}
+    <span class="sec-title" data-i18n="subscription">订阅</span>
+    <div class="group sub">
+      {{if .QR}}<img class="qr" src="{{.QR}}" alt="QR code">{{end}}
+      <span class="sub-hint" data-i18n="subHint">用客户端扫码，或复制链接</span>
+      <button type="button" class="btn-sec" id="copy-sub" data-link="{{.URI}}" data-i18n="copy">复制链接</button>
+    </div>
+    {{end}}
+    {{with $.Outbound}}
+    <div class="ob" id="ob">
+      <div class="ob-head"><span class="sec-title" data-i18n="outbound">自定义出站</span><p class="ob-note" id="ob-note" data-node="{{$.Self.UserName}}"></p></div>
+      <form id="ob-form" class="ob-form" method="post" action="/outbound/shadowsocks" novalidate{{if .Saved}} data-saved{{end}}>
+        <div class="group">
+          <label class="row"><span data-i18n="server">服务器</span><input name="server" value="{{.Server}}" data-ph="hostPlaceholder" autocomplete="off" spellcheck="false" data-1p-ignore></label>
+          <label class="row"><span data-i18n="port">端口</span><input name="server_port" value="{{.Port}}" data-ph="portPlaceholder" inputmode="numeric" autocomplete="off" data-1p-ignore></label>
+          <div class="row"><span data-i18n="cipher">加密方式</span>
+            <div class="sel" id="sel"><input type="hidden" name="method" value="{{.Method}}">
+              <button type="button" class="sel-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="sel-list" data-i18n-label="cipher"><span>{{.Method}}</span><svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5 6 7.5l3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <ul class="sel-list" id="sel-list" role="listbox" tabindex="-1" hidden>{{range .Methods}}<li role="option" data-v="{{.}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="m3 7.5 2.5 2.5L11 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>{{.}}</li>{{end}}</ul>
+            </div>
+          </div>
+          <label class="row"><span data-i18n="password">密码</span><span class="pw"><input id="pw" type="password" name="password" value="{{.Password}}" data-ph="passwordPlaceholder" autocomplete="off" data-1p-ignore><button type="button" class="chip" id="pw-toggle"></button></span></label>
+        </div>
+        <div class="group">
+          <label class="row sw"><span class="sw-t"><span data-i18n="mux">多路复用</span><span class="hint" data-i18n="muxHint">多个连接共用一条通道</span></span><input type="checkbox" name="mux" value="true" role="switch"{{if .Mux}} checked{{end}}><i class="switch"></i></label>
+          <label class="row sw"><span class="sw-t"><span data-i18n="padding">填充</span><span class="hint" data-i18n="paddingHint">补随机长度，流量更难被识别</span></span><input type="checkbox" name="padding" value="true" role="switch"{{if .Padding}} checked{{end}}><i class="switch"></i></label>
+        </div>
+        <div class="actions" id="actions">
+          <div class="st-row">
+            <span class="st" id="st" role="status"><i></i><span id="st-text"></span></span>
+            <span class="unsaved" id="unsaved" hidden><span data-i18n="unsaved">未保存</span><span class="sep" aria-hidden="true">·</span><button type="button" class="link" id="revert" data-i18n="revert">撤销改动</button></span>
+          </div>
+          <button type="button" class="btn-sec" id="test-btn"></button>
+          <button type="submit" class="btn-pri" id="save-btn"></button>
+        </div>
+      </form>
+      <form method="post" action="/outbound/delete" class="del-form" id="del-form" data-confirm="removeConfirm"{{if not .Saved}} hidden{{end}}><button type="submit" class="link-danger" data-i18n="remove">移除自定义出站</button></form>
+    </div>
+    {{end}}
+  </section>
+  {{end}}
+</div>
+{{end}}
+{{with .Users}}
+<div class="users">
+  <span class="sec-title" data-i18n="allUsers">全部用户</span>
+  <div class="group">
+    {{range .}}
+    <div class="urow">
+      <div class="u-name"><span class="u-user">{{.UserName}}</span><span class="tag">{{.InboundTag}}</span>{{if .Blocked}}<span class="u-blk" data-i18n="blocked">已超额</span>{{end}}</div>
+      <div class="u-usage"><span class="num">{{.Used}} / {{.Quota}}</span><div class="u-bar" style="{{.Ruler}}"><i></i></div></div>
+      <form method="post" action="/quota/reset" data-confirm="resetConfirm"><input type="hidden" name="tag" value="{{.InboundTag}}"><input type="hidden" name="name" value="{{.UserName}}"><button type="submit" class="chip" data-i18n="reset">重置</button></form>
+    </div>
+    {{end}}
+  </div>
+</div>
+{{end}}
+</div></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<script type="application/json" id="qd">{{.Data}}</script>
+<script>
+(function(){
+var MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+var WD_ZH=["周日","周一","周二","周三","周四","周五","周六"],WD_EN=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+function chanceZh(p){return Math.max(1,Math.round(p*10))}
+function chanceEn(p){return Math.max(10,Math.round(p*10)*10)}
+function md(d){return MON[d[0]-1]+" "+d[1]}
+var D={
+  zh:{title:"流量配额",light:"浅色",dark:"深色",classic:"经典版",themeLabel:"主题",langLabel:"语言",menu:"显示设置",
+    healthy:"正常",blocked:"已超额",remaining:"剩余",upload:"上传",download:"下载",
+    used:function(a,b){return "已用 "+a+" · "+b+"%"},
+    resetsOn:function(m,d,left){return m+" 月 "+d+" 日重置，"+(left===0?"今天":"还有 "+left+" 天")},
+    tone:{ok:"够用",warn:"可能不够",err:"不够用"},
+    fcLeft:function(v){return "重置时约剩 "+v},
+    fcChance:function(p){return "约 "+chanceZh(p)+" 成可能提前用完"},
+    fcDate:function(r){return "预计 "+r+"用完"},
+    dateRange:function(a,b){return a[0]===b[0]&&a[1]===b[1]?a[0]+" 月 "+a[1]+" 日":a[0]===b[0]?a[0]+" 月 "+a[1]+"–"+b[1]+" 日":a[0]+" 月 "+a[1]+" 日–"+b[0]+" 月 "+b[1]+" 日"},
+    basisToggle:"查看每天可用量",
+    basisLeft:function(p50,per){return ["重置时还剩 ",{b:p50}," 以上；按现在剩的量，每天可用约 ",{b:per}]},
+    basisRunOut:function(p,per){return ["约 "+chanceZh(p)+" 成可能在重置前用完；想撑到重置，每天最多用约 ",{b:per}]},
+    wd:WD_ZH,wdShort:["日","一","二","三","四","五","六"],today:"今天",todayShort:"今",
+    dayLabel:function(m,d,w){return m+" 月 "+d+" 日 "+WD_ZH[w]},
+    dailyTitle:"每天用量",lastDays:function(n){return "最近 "+n+" 天"},statAvg:"日均",statPeak:"最多",budgetLabel:"每天可用",
+    vsUsual:function(p){return p==null||Math.abs(p)<5?"和平时差不多":"比平时"+(p>0?"多":"少")+" "+Math.abs(p)+"%"},
+    tipToday:"今天到现在",tipOver:function(v){return "超出每天可用 "+v},
+    dailyChart:function(n,over,budget){return "最近 "+n+" 天每天的用量"+(budget?"，"+(over?"有 "+over+" 天超过每天可用量":"都没超过每天可用量"):"")+"；用左右方向键逐天查看"},
+    heatTitle:"高峰时段",heatSub:function(r,s){return ["最近 7 天 ",{b:r,accent:true}," 用得最多，约占全天 "+s+"%"]},
+    heatChart:"最近 7 天每个时辰的用量；用方向键逐格查看",
+    slot:function(s,r){return "子丑寅卯辰巳午未申酉戌亥".charAt(s)+"时 "+r},slotTick:function(s){return "子丑寅卯辰巳午未申酉戌亥".charAt(s)},
+    tipShare:function(p){return "占当天 "+p+"%"},notYet:"还没到",less:"少",more:"多",bjt:"北京时间",
+    subscription:"订阅",subHint:"用客户端扫码，或复制链接",copy:"复制链接",copied:"已复制",
+    outbound:"自定义出站",outboundIdle:function(n){return n+" 的流量从这里转发出去"},outboundVia:function(n){return [n+" 的流量经 "," 转发"]},
+    server:"服务器",port:"端口",cipher:"加密方式",password:"密码",show:"显示",hide:"隐藏",mux:"多路复用",padding:"填充",
+    muxHint:"多个连接共用一条通道",paddingHint:"补随机长度，流量更难被识别",hostPlaceholder:"域名或 IP",portPlaceholder:"443",passwordPlaceholder:"连接密码",
+    lampIdle:"未测试",lampTesting:"测试中…",lampOk:function(ms){return "已连通，"+ms+" ms"},lampFail:"连接失败",
+    why:{host:"服务器地址为空",port:"端口需为 1–65535",password:"密码为空"},
+    test:"测试连接",testHint:"先填服务器和端口",testing:"测试中…",save:"保存",saved:"已保存",saving:"保存中…",
+    toastTestOk:function(ms){return "已连通 "+ms+" ms"},toastTestFail:"连接失败",toastSaved:"出站配置已保存",toastSaveFail:"保存失败",
+    savedWarning:function(e){return "连通性检查没通过："+e},toastRemoved:"已移除自定义出站",requestFailed:"请求失败",
+    retry:"重试",undo:"撤销",dismiss:"关闭提示",unsaved:"未保存",revert:"撤销改动",
+    updatedAgo:function(m){return m<1?"刚刚更新":m+" 分钟前更新"},refreshFailed:"更新失败，显示的是旧数据",
+    remove:"移除自定义出站",removeConfirm:"确定移除自定义出站？",allUsers:"全部用户",reset:"重置",resetConfirm:"确定重置该用户的流量？"},
+  en:{title:"Traffic quota",light:"Light",dark:"Dark",classic:"Classic",themeLabel:"Theme",langLabel:"Language",menu:"Display settings",
+    healthy:"Online",blocked:"Over quota",remaining:"Remaining",upload:"Upload",download:"Download",
+    used:function(a,b){return "Used "+a+" · "+b+"%"},
+    resetsOn:function(m,d,left){return "Resets "+md([m,d])+", "+(left===0?"today":left+" day"+(left===1?"":"s")+" left")},
+    tone:{ok:"On track",warn:"May run out",err:"Running out"},
+    fcLeft:function(v){return "~"+v+" left at reset"},
+    fcChance:function(p){return "~"+chanceEn(p)+"% chance to run out early"},
+    fcDate:function(r){return "likely out "+r},
+    dateRange:function(a,b){return a[0]===b[0]&&a[1]===b[1]?md(a):a[0]===b[0]?md(a)+"–"+b[1]:md(a)+" – "+md(b)},
+    basisToggle:"Show daily allowance",
+    basisLeft:function(p50,per){return [{b:p50}," or more left at reset; at this rate you can use about ",{b:per}," a day"]},
+    basisRunOut:function(p,per){return ["About "+chanceEn(p)+"% chance to run out before reset; to last, keep to about ",{b:per}," a day"]},
+    wd:WD_EN,wdShort:WD_EN,today:"Today",todayShort:"Now",
+    dayLabel:function(m,d,w){return WD_EN[w]+", "+md([m,d])},
+    dailyTitle:"Daily usage",lastDays:function(n){return "Last "+n+" days"},statAvg:"Daily avg",statPeak:"Peak",budgetLabel:"Daily budget",
+    vsUsual:function(p){return p==null||Math.abs(p)<5?"about usual":Math.abs(p)+"% "+(p>0?"more":"less")+" than usual"},
+    tipToday:"Today so far",tipOver:function(v){return v+" over budget"},
+    dailyChart:function(n,over,budget){return "Daily usage over the last "+n+" days"+(budget?", "+(over?over+" over the daily budget":"none over the daily budget"):"")+". Use arrow keys to step through days"},
+    heatTitle:"Busy hours",heatSub:function(r,s){return ["Last 7 days, busiest ",{b:r,accent:true},", about "+s+"% of the day"]},
+    heatChart:"Usage per 2-hour slot over the last 7 days. Use arrow keys to step through cells",
+    slot:function(s,r){return r},slotTick:function(s){return String(s*2)},
+    tipShare:function(p){return p+"% of the day"},notYet:"Not yet",less:"Less",more:"More",bjt:"Beijing time",
+    subscription:"Subscription",subHint:"Scan with your client, or copy the link",copy:"Copy link",copied:"Copied",
+    outbound:"Custom outbound",outboundIdle:function(n){return "Traffic from "+n+" goes out through here"},outboundVia:function(n){return ["Traffic from "+n+" goes out via ",""]},
+    server:"Server",port:"Port",cipher:"Cipher",password:"Password",show:"Show",hide:"Hide",mux:"Multiplex",padding:"Padding",
+    muxHint:"Shares one tunnel across connections",paddingHint:"Adds random length so traffic is harder to spot",hostPlaceholder:"Domain or IP",portPlaceholder:"443",passwordPlaceholder:"Password",
+    lampIdle:"Not tested",lampTesting:"Testing…",lampOk:function(ms){return "Connected, "+ms+" ms"},lampFail:"Failed",
+    why:{host:"Server is empty",port:"Port must be 1–65535",password:"Password is empty"},
+    test:"Test",testHint:"Fill in server and port first",testing:"Testing…",save:"Save",saved:"Saved",saving:"Saving…",
+    toastTestOk:function(ms){return "Connected in "+ms+" ms"},toastTestFail:"Connection failed",toastSaved:"Outbound saved",toastSaveFail:"Couldn't save",
+    savedWarning:function(e){return "The connectivity check failed: "+e},toastRemoved:"Custom outbound removed",requestFailed:"Request failed",
+    retry:"Retry",undo:"Undo",dismiss:"Dismiss",unsaved:"Unsaved",revert:"Revert",
+    updatedAgo:function(m){return m<1?"Just updated":"Updated "+m+" min ago"},refreshFailed:"Update failed, showing old data",
+    remove:"Remove custom outbound",removeConfirm:"Remove the custom outbound?",allUsers:"All users",reset:"Reset",resetConfirm:"Reset this user's traffic?"}
+};
+var root=document.documentElement;
+function load(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function store(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+function $(id){return document.getElementById(id)}
+function all(sel,el){return Array.prototype.slice.call((el||document).querySelectorAll(sel))}
+function clamp(v,lo,hi){return Math.min(hi,Math.max(lo,v))}
+function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e}
+function hh(h){return (h<10?"0":"")+h+":00"}
+function slotStart(s){return (s*2+23)%24}
+function slotRange(s){var h=slotStart(s);return hh(h)+"–"+hh((h+2)%24)}
+function mouse(e){return e.pointerType==="mouse"}
+// 带加粗片段的一句话：字符串原样，{b} 用数字字体加粗，accent 用强调色；peak 给可悬停的高峰时段
+function rich(target,parts,peak){
+  target.textContent="";
+  parts.forEach(function(p){
+    if(typeof p==="string"){target.appendChild(document.createTextNode(p));return}
+    target.appendChild(p.accent&&peak?peak(p.b):el("span",p.accent?"accent":"strong",p.b));
+  });
+}
+var Q={};try{Q=JSON.parse($("qd").textContent)||{}}catch(e){}
+var lang=load("quota-language")==="en"?"en":"zh",t=D[lang];
+var loadedAt=Date.now(),stale=false;
+var renders=[];
+function onRender(fn){renders.push(fn)}
+
+function render(){
+  t=D[lang];root.lang=lang==="zh"?"zh-CN":"en";
+  all("[data-i18n]").forEach(function(e){var v=t[e.getAttribute("data-i18n")];if(typeof v==="function")v=v(e.getAttribute("data-a"),e.getAttribute("data-b"));if(typeof v==="string")e.textContent=v});
+  all("[data-i18n-label]").forEach(function(e){e.setAttribute("aria-label",t[e.getAttribute("data-i18n-label")])});
+  all("[data-ph]").forEach(function(e){e.placeholder=t[e.getAttribute("data-ph")]});
+  all("[data-wd]").forEach(function(e){var s=e.hasAttribute("data-short");e.textContent=e.hasAttribute("data-today")?(s?t.todayShort:t.today):(s?t.wdShort:t.wd)[+e.getAttribute("data-wd")]});
+  all("[data-slot]").forEach(function(e){e.textContent=t.slotTick(+e.getAttribute("data-slot"))});
+  $("menu-btn").setAttribute("aria-label",t.menu);$("menu-btn").title=t.menu;
+  segs.forEach(function(s){s.sync()});
+  var upd=stale?null:t.updatedAgo(Math.floor((Date.now()-loadedAt)/60000))+" · "+t.bjt;
+  all(".upd").forEach(function(u){
+    u.textContent="";
+    if(upd){u.textContent=upd;return}
+    u.appendChild(el("span","err",t.refreshFailed));
+    var b=el("button",null,t.retry);b.type="button";b.onclick=refresh;u.appendChild(b);
+  });
+  if(Q.reset&&$("reset-line"))$("reset-line").textContent=t.resetsOn(Q.reset.m,Q.reset.d,Q.reset.left);
+  renders.forEach(function(fn){fn()});
+}
+
+// 主题、语言：分段切换；主题从点的按钮处圆形展开
+var segs=all(".seg").map(function(s){
+  var kind=s.getAttribute("data-seg"),btns=all("button",s),ind=s.querySelector("i");
+  btns.forEach(function(b){b.onclick=function(){var v=b.getAttribute("data-v");if(kind==="theme"){if(v!==root.dataset.theme)setTheme(v,b)}else if(v!==lang){lang=v;store("quota-language",lang);render()}}});
+  return {sync:function(){
+    var cur=kind==="theme"?root.dataset.theme:lang,i=0;
+    btns.forEach(function(b,j){var on=b.getAttribute("data-v")===cur;b.setAttribute("aria-checked",on);if(on)i=j});
+    s.setAttribute("aria-label",kind==="theme"?t.themeLabel:t.langLabel);
+    ind.style.transform="translateX("+i*100+"%)";
+  }};
+});
+function setTheme(v,from){
+  var apply=function(){root.dataset.theme=v;store("quota-theme",v);render()};
+  if(!document.startViewTransition||matchMedia("(prefers-reduced-motion: reduce)").matches){apply();return}
+  var r=from.getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2;
+  var radius=Math.hypot(Math.max(x,innerWidth-x),Math.max(y,innerHeight-y));
+  document.startViewTransition(apply).ready.then(function(){
+    root.animate({clipPath:["circle(0px at "+x+"px "+y+"px)","circle("+radius+"px at "+x+"px "+y+"px)"]},{duration:450,easing:"cubic-bezier(.4,0,.2,1)",pseudoElement:"::view-transition-new(root)"});
+  });
+}
+
+// 点外面或按 Esc 关闭的弹出层
+function dismissable(box,isOpen,close){
+  document.addEventListener("pointerdown",function(e){if(isOpen()&&!box.contains(e.target))close()});
+  document.addEventListener("keydown",function(e){if(e.key==="Escape"&&isOpen())close()});
+}
+// 手机的「⋯」菜单：主题、语言、经典版
+(function(){
+  var btn=$("menu-btn"),ctl=$("ctl"),box=ctl.parentNode;
+  var set=function(on){ctl.classList.toggle("open",on);btn.setAttribute("aria-expanded",on)};
+  btn.onclick=function(){set(!ctl.classList.contains("open"))};
+  dismissable(box,function(){return ctl.classList.contains("open")},function(){set(false)});
+})();
+
+// 用量预测标签：电脑悬停弹出说明、点一下钉住；手机点一下在重置日期下展开
+if(Q.forecast){
+  var F=Q.forecast;
+  onRender(function(){
+    var detail=F.tone==="ok"?t.fcLeft(F.left):F.tone==="warn"||!F.from?t.fcChance(F.p):t.fcDate(t.dateRange(F.from,F.to));
+    all(".fc-tag").forEach(function(b){b.querySelector(".fc-t").textContent=t.tone[F.tone];b.querySelector(".fc-x").textContent=detail;b.title=t.basisToggle});
+    all(".fc-basis").forEach(function(p){rich(p,F.tone==="ok"?t.basisLeft(F.left,F.perDay):t.basisRunOut(F.p,F.perDay))});
+  });
+  (function(){
+    var box=$("fc-d"),tag=box.querySelector(".fc-tag"),pop=$("fc-basis-d"),hover=false,pinned=false,timer=0;
+    var sync=function(){var on=hover||pinned;pop.hidden=!on;tag.setAttribute("aria-expanded",on)};
+    var later=function(on){return function(e){if(!mouse(e))return;clearTimeout(timer);timer=setTimeout(function(){hover=on;sync()},on?80:160)}};
+    box.addEventListener("pointerenter",later(true));
+    box.addEventListener("pointerleave",later(false));
+    tag.onclick=function(){if(pinned){pinned=false;hover=false}else pinned=true;sync()};
+    dismissable(box,function(){return hover||pinned},function(){clearTimeout(timer);hover=pinned=false;sync()});
+    var mtag=document.querySelector(".fc-m"),mpop=$("fc-basis-m");
+    mtag.onclick=function(){mpop.hidden=!mpop.hidden;mtag.setAttribute("aria-expanded",!mpop.hidden)};
+  })();
+}
+
+// 提示框放在 x（相对 box 的像素）旁边；靠右时放左边
+function placeTip(tip,box,x,right){
+  if(right){tip.style.left="auto";tip.style.right=(box.clientWidth-x+10)+"px"}else{tip.style.right="auto";tip.style.left=(x+10)+"px"}
+}
+function fillTip(tip,title,value,note,warn){
+  tip.children[0].textContent=title;tip.children[1].textContent=value;
+  tip.children[2].textContent=note||"";tip.children[2].hidden=!note;tip.children[2].classList.toggle("warn",!!warn);
+  tip.hidden=false;
+}
+
+// 两张图互相高亮同一天
+var link={bars:function(){},heat:function(){}};
+
+// 每天用量：鼠标在图上移动，离光标最近的柱子出提示；手机按住左右拖；方向键逐天看
+if(Q.daily&&$("bars")){(function(){
+  var B=Q.daily.bars,n=B.length,box=$("bars"),els=all(".bar",box),tip=$("bars-tip");
+  var active=null,avgOn=false,kbd=false,timer=0,linked=null;
+  var stats=all(".stat");
+  function draw(){
+    els.forEach(function(e,i){e.classList.toggle("on",i===active);e.classList.toggle("dim",linked!==null&&B[i].ago!==linked)});
+    box.classList.toggle("tipping",active!==null);
+    box.classList.toggle("avg-on",avgOn);
+    if(active===null){tip.hidden=true;return}
+    var b=B[active],e=els[active];
+    fillTip(tip,b.ago===0?t.tipToday:t.dayLabel(b.m,b.d,b.w),b.v,b.ago===0?t.vsUsual(Q.vs):b.hot?t.tipOver(b.over):null,b.hot);
+    tip.style.top="0";
+    placeTip(tip,box,e.offsetLeft+e.offsetWidth/2,active>n*.6);
+  }
+  function select(i){clearTimeout(timer);active=i;link.heat(i===null?null:B[i].ago);draw()}
+  function reset(){kbd=false;avgOn=false;stats.forEach(function(s){s.classList.remove("on")});select(null)}
+  function resetLater(){clearTimeout(timer);timer=setTimeout(reset,1600)}
+  function pickAt(x){var r=box.getBoundingClientRect();if(!r.width)return;kbd=false;select(clamp(Math.floor((x-r.left)/r.width*n),0,n-1))}
+  box.addEventListener("pointermove",function(e){if(mouse(e)||e.buttons)pickAt(e.clientX)});
+  box.addEventListener("pointerdown",function(e){if(mouse(e))return;box.setPointerCapture(e.pointerId);pickAt(e.clientX)});
+  box.addEventListener("pointerup",function(e){if(!mouse(e))resetLater()});
+  box.addEventListener("pointercancel",reset);
+  box.addEventListener("pointerleave",function(e){if(mouse(e))reset()});
+  box.addEventListener("keydown",function(e){
+    var cur=active===null?n-1:active,next={ArrowLeft:cur-1,ArrowRight:cur+1,Home:0,End:n-1}[e.key];
+    if(next==null)return;e.preventDefault();kbd=true;avgOn=false;select(clamp(next,0,n-1));
+  });
+  box.addEventListener("blur",function(){if(kbd)reset()});
+  // 日均、最多、今天三个数：悬停 / 聚焦时让图里对应的线或柱子亮起来
+  stats.forEach(function(s){
+    var kind=s.getAttribute("data-stat");
+    var show=function(){stats.forEach(function(x){x.classList.toggle("on",x===s)});if(kind==="avg"){select(null);avgOn=true;draw()}else{avgOn=false;select(kind==="peak"?Q.daily.peak:n-1)}};
+    s.addEventListener("pointerenter",function(e){if(mouse(e))show()});
+    s.addEventListener("pointerleave",function(e){if(mouse(e))reset()});
+    s.addEventListener("pointerup",function(e){if(!mouse(e)){show();resetLater()}});
+    s.addEventListener("focus",function(){if(s.matches(":focus-visible")){show();kbd=true}});
+    s.addEventListener("blur",function(){if(kbd)reset()});
+  });
+  link.bars=function(ago){linked=ago;draw()};
+  onRender(function(){
+    $("daily-sub").textContent=t.lastDays(Q.daily.days);
+    $("vs-today").textContent=t.vsUsual(Q.vs);
+    box.setAttribute("aria-label",t.dailyChart(Q.daily.days,Q.daily.over,!!Q.daily.budget));
+    draw();
+  });
+})()}
+
+// 高峰时段
+var H=Q.heat;
+function rowLabel(r,short){var row=H.rows[r];return row.today?(short?t.todayShort:t.today):(short?t.wdShort:t.wd)[row.w]}
+function cellTitle(r,s){return rowLabel(r)+" · "+t.slot(s,slotRange(s))}
+function cellValue(c){return c.hasAttribute("data-f")?t.notYet:c.getAttribute("data-v")}
+function cellShare(c){var sh=c.getAttribute("data-sh");return c.hasAttribute("data-f")||!sh?null:t.tipShare(sh)}
+function inPeak(s){return H.insight&&s>=H.insight.lo&&s<=H.insight.hi}
+var peakSet={};
+// 结论里的时间段：电脑悬停只亮高峰几列，手机点一下切换
+onRender(function(){
+  all("[data-peak-sub]").forEach(function(p){
+    var target=p.getAttribute("data-peak-sub"),touch=p.hasAttribute("data-touch");
+    rich(p,t.heatSub(H.insight.range,H.insight.share),function(text){
+      var s;
+      if(touch){
+        s=el("button","peak",text);s.type="button";s.setAttribute("aria-pressed",!!peakSet.on);
+        s.onclick=function(){var on=s.getAttribute("aria-pressed")!=="true";s.setAttribute("aria-pressed",on);peakSet[target](on)};
+      }else{
+        s=el("span","peak",text);s.tabIndex=0;
+        var on=function(){peakSet[target](true)},off=function(){peakSet[target](false)};
+        s.onpointerenter=on;s.onpointerleave=off;s.onfocus=on;s.onblur=off;
+      }
+      return s;
+    });
+  });
+});
+
+if(H&&$("hm-grid")){(function(){
+  var grid=$("hm-grid"),cells=all(".c",grid),days=all(".hm-day",grid),hrs=all(".hm-hr",grid),tip=$("hm-tip");
+  var last=days.length-1,hover=null,peak=false,linked=null;
+  function at(r,c){return cells[r*12+c]}
+  function draw(){
+    cells.forEach(function(e){
+      var r=+e.getAttribute("data-r"),c=+e.getAttribute("data-c");
+      e.classList.toggle("sel",!!hover&&hover.r===r&&hover.c===c);
+      e.classList.toggle("dim",(peak&&!inPeak(c))||(linked!==null&&linked!==r));
+    });
+    days.forEach(function(e,r){e.classList.toggle("hl",(!!hover&&hover.r===r)||linked===r)});
+    hrs.forEach(function(e,c){e.classList.toggle("hl",!!hover&&hover.c===c)});
+    grid.classList.toggle("peak-on",peak);
+    if(!hover){tip.hidden=true;return}
+    var e=at(hover.r,hover.c);
+    fillTip(tip,cellTitle(hover.r,hover.c),cellValue(e),cellShare(e));
+    // 两头的格子提示靠边对齐，免得伸出卡片
+    var align=hover.c<2?"left":hover.c>9?"right":"center";
+    var x=align==="left"?e.offsetLeft:align==="right"?e.offsetLeft+e.offsetWidth:e.offsetLeft+e.offsetWidth/2;
+    tip.style.right="auto";tip.style.left=x+"px";tip.style.top=(e.offsetTop-8)+"px";
+    tip.style.transform="translate("+(align==="left"?"0":align==="right"?"-100%":"-50%")+",-100%)";
+  }
+  function enter(r,c){hover={r:r,c:c};link.bars(last-r);draw()}
+  function leave(){hover=null;link.bars(null);draw()}
+  cells.forEach(function(e){e.addEventListener("pointerenter",function(){enter(+e.getAttribute("data-r"),+e.getAttribute("data-c"))})});
+  grid.addEventListener("pointerleave",leave);
+  grid.addEventListener("blur",leave);
+  grid.addEventListener("keydown",function(e){
+    var cur=hover||{r:last,c:0},d={ArrowUp:[-1,0],ArrowDown:[1,0],ArrowLeft:[0,-1],ArrowRight:[0,1]}[e.key];
+    if(!d)return;e.preventDefault();enter(clamp(cur.r+d[0],0,last),clamp(cur.c+d[1],0,11));
+  });
+  peakSet["hm-grid"]=function(on){peak=on;draw()};
+  link.heat=function(ago){linked=ago!==null&&ago<=last?last-ago:null;draw()};
+  onRender(function(){grid.setAttribute("aria-label",t.heatChart);draw()});
+})()}
+
+// 手机热力图：12 行时辰 × 7 列天，点格子在上方读数
+if(H&&$("hmm-cells")){(function(){
+  var cells=$("hmm-cells"),els=all(".c",cells),hours=all(".hmm-hours span"),dayEls=all(".hmm-day");
+  var nd=dayEls.length,now=Math.max(0,hours.findIndex(function(h){return h.classList.contains("cur")}));
+  var pick={d:nd-1,h:now},peak=false;
+  function draw(){
+    els.forEach(function(e,i){var h=Math.floor(i/nd),d=i%nd;e.classList.toggle("sel",h===pick.h&&d===pick.d);e.classList.toggle("dim",peak&&!inPeak(h))});
+    hours.forEach(function(e,h){e.classList.toggle("hl",h===pick.h)});
+    dayEls.forEach(function(e,d){e.classList.toggle("hl",d===pick.d)});
+    var c=els[pick.h*nd+pick.d];
+    $("pick-l").textContent=cellTitle(pick.d,pick.h);$("pick-v").textContent=cellValue(c);$("pick-s").textContent=cellShare(c)||"";
+  }
+  cells.addEventListener("click",function(e){var r=cells.getBoundingClientRect();pick={d:clamp(Math.floor((e.clientX-r.left)/r.width*nd),0,nd-1),h:clamp(Math.floor((e.clientY-r.top)/r.height*12),0,11)};draw()});
+  cells.addEventListener("keydown",function(e){
+    var d=pick.d,h=pick.h;
+    switch(e.key){case"ArrowLeft":d--;break;case"ArrowRight":d++;break;case"ArrowUp":h--;break;case"ArrowDown":h++;break;case"Home":h=0;break;case"End":h=11;break;default:return}
+    e.preventDefault();pick={d:clamp(d,0,nd-1),h:clamp(h,0,11)};draw();
+  });
+  peakSet["hmm-cells"]=function(on){peak=on;peakSet.on=on;draw()};
+  onRender(function(){cells.setAttribute("aria-label",t.heatChart);draw()});
+})()}
+
+var copy=$("copy-sub");
+if(copy)copy.onclick=function(){
+  var uri=copy.getAttribute("data-link"),done=function(){copy.textContent=t.copied;setTimeout(function(){copy.textContent=t.copy},1500)};
+  if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(uri).then(done,fallback)}else fallback();
+  function fallback(){var a=document.createElement("textarea");a.value=uri;a.style.position="fixed";a.style.opacity="0";document.body.appendChild(a);a.select();a.setSelectionRange(0,99999);try{document.execCommand("copy")}catch(e){}document.body.removeChild(a);done()}
+};
+
+// 提示条：同时最多 3 条，新的在最上面，到时自动消失
+function toast(o){
+  var box=$("toasts"),n=el("div","toast"+(o.tone==="err"?" err":""));
+  n.setAttribute("role","status");
+  n.appendChild(el("i"));
+  var body=el("div","toast-b");body.appendChild(el("b",null,o.title));if(o.body)body.appendChild(el("span",null,o.body));n.appendChild(body);
+  var close=function(){if(n.parentNode)box.removeChild(n)};
+  if(o.action){var a=el("button","link",o.action.label);a.type="button";a.onclick=function(){close();o.action.run()};n.appendChild(a)}
+  var x=el("button","toast-x");x.type="button";x.setAttribute("aria-label",t.dismiss);x.title=t.dismiss;
+  x.innerHTML='<svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+  x.onclick=close;n.appendChild(x);
+  box.insertBefore(n,box.firstChild);
+  while(box.children.length>3)box.removeChild(box.lastChild);
+  setTimeout(close,o.tone==="err"?7000:4000);
+}
+
+function post(url,body){
+  return fetch(url,{method:"POST",body:body,headers:{"Accept":"application/json","Content-Type":"application/x-www-form-urlencoded"}})
+    .then(function(res){return res.json().then(function(j){return{ok:res.ok,j:j}},function(){return{ok:false,j:{}}})});
+}
+
+// 自定义出站
+var form=$("ob-form"),busy={testing:false,saving:false},dirty=false;
+if(form){(function(){
+  // form.method 是表单自己的 method 属性，加密方式要从隐藏输入框读
+  var sel=$("sel"),selBtn=sel.querySelector(".sel-btn"),list=$("sel-list"),opts=all("li",list),act=0,method=sel.querySelector("input");
+  var st={test:"idle",ms:0,why:"",flash:false,pw:false};
+  function values(){return{server:form.server.value,server_port:form.server_port.value,method:method.value,password:form.password.value,mux:form.mux.checked,padding:form.padding.checked}}
+  function same(a,b){return Object.keys(a).every(function(k){return a[k]===b[k]})}
+  function setValues(v){form.server.value=v.server;form.server_port.value=v.server_port;setMethod(v.method);form.password.value=v.password;form.mux.checked=v.mux;form.padding.checked=v.padding;changed()}
+  function body(v){var p=new URLSearchParams();Object.keys(v).forEach(function(k){if(typeof v[k]!=="boolean"||v[k])p.set(k,v[k]===true?"true":v[k])});return p}
+  var saved=values(),hasSaved=form.hasAttribute("data-saved");
+  function invalid(v){
+    if(!v.server.trim())return"host";
+    var port=Number(v.server_port.trim());
+    if(!/^\d+$/.test(v.server_port.trim())||port<1||port>65535)return"port";
+    if(!v.password)return"password";
+    return"";
+  }
+  // 加密方式：自定义下拉；下面放不下菜单时往上开
+  function setMethod(v){method.value=v;selBtn.firstChild.textContent=v;opts.forEach(function(o){o.setAttribute("aria-selected",o.getAttribute("data-v")===v)})}
+  function setAct(i){act=clamp(i,0,opts.length-1);opts.forEach(function(o,j){o.classList.toggle("act",j===act)});list.setAttribute("aria-activedescendant","sel-o"+act)}
+  opts.forEach(function(o,i){o.id="sel-o"+i;o.onpointerenter=function(){setAct(i)};o.onclick=function(){choose(i)}});
+  function openList(){
+    var r=selBtn.getBoundingClientRect(),below=innerHeight-r.bottom;
+    sel.classList.toggle("up",below<opts.length*42+22&&r.top>below);
+    list.hidden=false;selBtn.setAttribute("aria-expanded",true);
+    setAct(Math.max(0,opts.findIndex(function(o){return o.getAttribute("data-v")===method.value})));
+    list.focus({preventScroll:true});
+  }
+  function closeList(focus){list.hidden=true;selBtn.setAttribute("aria-expanded",false);if(focus)selBtn.focus()}
+  function choose(i){setMethod(opts[i].getAttribute("data-v"));closeList(true);changed()}
+  selBtn.onclick=function(){list.hidden?openList():closeList()};
+  selBtn.onkeydown=function(e){if(["ArrowDown","ArrowUp","Enter"," "].indexOf(e.key)>=0){e.preventDefault();openList()}};
+  list.onkeydown=function(e){
+    var k=e.key;
+    if(k==="Tab"){closeList();return}
+    var run={ArrowDown:function(){setAct(act+1)},ArrowUp:function(){setAct(act-1)},Home:function(){setAct(0)},End:function(){setAct(opts.length-1)},Enter:function(){choose(act)}," ":function(){choose(act)},Escape:function(){closeList(true)}}[k];
+    if(!run)return;e.preventDefault();e.stopPropagation();run();
+  };
+  dismissable(sel,function(){return !list.hidden},function(){closeList()});
+
+  function changed(){dirty=!same(values(),saved);render()}
+  form.addEventListener("input",function(e){if(e.target.name==="server"||e.target.name==="server_port"){st.test="idle"}changed()});
+  form.addEventListener("change",changed);
+  $("pw-toggle").onclick=function(e){e.preventDefault();st.pw=!st.pw;$("pw").type=st.pw?"text":"password";render()};
+  $("revert").onclick=function(){setValues(saved);st.test="idle"};
+
+  function fail(why){st.test="fail";st.why=why;render()}
+  function runTest(){
+    if(busy.testing)return;
+    var v=values(),bad=invalid(v);
+    if(bad){fail(t.why[bad]);toast({tone:"err",title:t.toastTestFail,body:t.why[bad]});return}
+    busy.testing=true;st.test="testing";render();
+    post("/outbound/shadowsocks/test",body(v)).then(function(r){
+      if(r.ok&&r.j.delay!=null){st.test="ok";st.ms=r.j.delay;toast({tone:"ok",title:t.toastTestOk(r.j.delay)});return}
+      var why=r.j.error||t.requestFailed;fail(why);toast({tone:"err",title:t.toastTestFail,body:why,action:{label:t.retry,run:runTest}});
+    },function(){fail(t.requestFailed);toast({tone:"err",title:t.toastTestFail,body:t.requestFailed,action:{label:t.retry,run:runTest}})})
+    .then(function(){busy.testing=false;render()});
+  }
+  $("test-btn").onclick=runTest;
+
+  // 保存 v（为 null 时移除出站），之后表单显示 shown。
+  // undo 是保存前的状态，提示里的「撤销」回到它：之前保存过就存回去，没保存过就移除
+  function persist(v,shown,undo){
+    busy.saving=true;render();
+    var req=v?post("/outbound/shadowsocks",body(v)):post("/outbound/delete","");
+    return req.then(function(r){
+      if(!r.ok){toast({tone:"err",title:t.toastSaveFail,body:r.j.error||t.requestFailed});return}
+      saved=shown;hasSaved=!!v;$("del-form").hidden=!hasSaved;
+      setValues(saved);
+      if(!undo)return;
+      st.flash=true;setTimeout(function(){st.flash=false;render()},1600);
+      toast({tone:"ok",title:t.toastSaved,body:r.j.warning?t.savedWarning(r.j.warning):"",action:{label:t.undo,run:function(){persist(undo.has?undo.v:null,undo.v,null)}}});
+    },function(){toast({tone:"err",title:t.toastSaveFail,body:t.requestFailed})})
+    .then(function(){busy.saving=false;changed()});
+  }
+  form.addEventListener("submit",function(e){
+    e.preventDefault();
+    if(busy.saving||!dirty)return;
+    var v=values(),bad=invalid(v);
+    if(bad){fail(t.why[bad]);toast({tone:"err",title:t.toastSaveFail,body:t.why[bad]});return}
+    persist(v,v,{v:saved,has:hasSaved});
+  });
+
+  onRender(function(){
+    var node=$("ob-note"),n=node.getAttribute("data-node"),host=saved.server.trim(),port=saved.server_port.trim();
+    if(!hasSaved||!host)node.textContent=t.outboundIdle(n);
+    else{var via=t.outboundVia(n);rich(node,[via[0],{b:port?host+":"+port:host},via[1]])}
+    var s=$("st");s.className="st "+st.test;
+    $("st-text").textContent="";
+    $("st-text").appendChild(document.createTextNode(st.test==="testing"?t.lampTesting:st.test==="ok"?t.lampOk(st.ms):st.test==="fail"?t.lampFail:t.lampIdle));
+    if(st.test==="fail"&&st.why)$("st-text").appendChild(el("span","why"," · "+st.why));
+    $("unsaved").hidden=!dirty||busy.saving;
+    $("pw-toggle").textContent=st.pw?t.hide:t.show;$("pw-toggle").hidden=!form.password.value;
+    var v=values(),tb=$("test-btn"),sb=$("save-btn"),canTest=!!(v.server.trim()&&v.server_port.trim());
+    tb.disabled=busy.testing||!canTest;tb.title=canTest?"":t.testHint;
+    tb.innerHTML=busy.testing?'<span class="spin" aria-hidden="true"></span>':"";tb.appendChild(document.createTextNode(busy.testing?t.testing:t.test));
+    sb.disabled=!dirty||busy.saving;
+    sb.innerHTML=busy.saving?'<span class="spin" aria-hidden="true"></span>':st.flash?'<svg class="check" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>':"";
+    sb.appendChild(document.createTextNode(busy.saving?t.saving:st.flash?t.saved:t.save));
+    all(".row input[name=server],.row input[name=server_port]").forEach(function(i){i.setAttribute("aria-invalid",st.test==="fail"&&((i.name==="server"&&st.why===t.why.host)||(i.name==="server_port"&&st.why===t.why.port)))});
+    document.body.classList.toggle("bar-on",inView||dirty||busy.testing||busy.saving);
+  });
+
+  // 手机底部操作条：滑到出站设置、有没保存的改动、正在测试 / 保存时才出来
+  var inView=false;
+  if(window.IntersectionObserver){
+    new IntersectionObserver(function(es){inView=es[0].isIntersecting;render()},{rootMargin:"0px 0px -"+($("actions").offsetHeight||110)+"px 0px"}).observe($("ob"));
+  }else inView=true;
+})()}
+
+all("form[data-confirm]").forEach(function(f){f.addEventListener("submit",function(e){if(!confirm(t[f.getAttribute("data-confirm")]))e.preventDefault()})});
+
+// 每分钟刷新；先确认能取到新页面再重载，取不到就留着旧数据并提示
+function refresh(){
+  fetch(location.pathname,{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;location.reload()},function(){throw 0})
+    .catch(function(){stale=true;render()});
+}
+setInterval(function(){
+  var a=document.activeElement;
+  var list=$("sel-list");
+  if(dirty||busy.testing||busy.saving||(a&&/^(INPUT|TEXTAREA)$/.test(a.tagName))||(list&&!list.hidden))return;
+  refresh();
+},60000);
+setInterval(function(){if(!stale)render()},30000);
+
+render();
+})();
+</script>
+</body>
+</html>
