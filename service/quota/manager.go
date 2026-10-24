@@ -405,7 +405,7 @@ func (s *UserState) snapshot() UserSnapshot {
 	}
 	var resetAt int64
 	if s.MonthlyQuota {
-		resetAt = nextMonthlyQuotaAt(s.StartDate, s.CycleStart).Unix()
+		resetAt = nextMonthlyQuotaAt(s.StartDate, time.Unix(s.CycleStart.Load(), 0), time.Now()).Unix()
 	}
 	return UserSnapshot{
 		InboundTag:     s.Key.InboundTag,
