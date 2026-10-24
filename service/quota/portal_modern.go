@@ -361,9 +361,7 @@ func (h *portalOutbound) shichenUsage(inboundTag, userName string, now time.Time
 	if h.manager.history == nil {
 		return shichenUsage{}, false
 	}
-	// Shifting by an hour makes 23:00 the start of the next day's slot 0.
-	shifted := now.In(quotaLocation).Add(time.Hour)
-	todayStart := time.Date(shifted.Year(), shifted.Month(), shifted.Day(), 0, 0, 0, 0, quotaLocation).Add(-time.Hour)
+	shifted, todayStart := bjtDayStart(now)
 	start := todayStart.AddDate(0, 0, -(historyDays - 1))
 	ctx := h.ctx
 	if ctx == nil {

@@ -244,3 +244,31 @@ func TestPortalOutboundEndpointsAnswerJSON(t *testing.T) {
 		t.Fatalf("expected JSON delete result, got %s %q", response.Status, body)
 	}
 }
+
+func TestClassicWeeklyHistoryUsesSameBJTDaysAsHeatmap(t *testing.T) {
+	store, err := OpenHistory(filepath.Join(t.TempDir(), "history.db"), 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	manager := newTestPortalManager()
+	manager.SetHistory(store)
+	// 2026-10-12 15:30 UTC is Monday 23:30 BJT, already Tuesday's 子时.
+	now := time.Date(2026, 10, 12, 15, 30, 0, 0, time.UTC)
+	store.lastFlush = now.Add(-time.Minute)
+	uplink, downlink := store.Counters(HistoryDimensions{InboundTag: testInboundTag, UserName: testUserName, Target: "example.com"})
+	uplink.Add(100)
+	downlink.Add(200)
+	if err = store.Flush(now); err != nil {
+		t.Fatal(err)
+	}
+
+	h := &portalOutbound{ctx: context.Background(), manager: manager}
+	html := h.renderWeeklyHistoryAt(UserSnapshot{InboundTag: testInboundTag, UserName: testUserName}, now)
+	if !strings.Contains(html, `title="Tue 13 · Upload 100 B · Download 200 B"`) {
+		t.Fatalf("expected traffic on Tue 13, got: %s", html)
+	}
+	if strings.Contains(html, "UTC") {
+		t.Fatalf("history note should not mention UTC: %s", html)
+	}
+}

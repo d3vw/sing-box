@@ -751,34 +751,57 @@ func (h *portalOutbound) renderAll(selfInboundTag, selfUserName string) string {
 	return buildPage("Traffic Quota", sections.String())
 }
 
+// bjtDayStart returns the start of the current BJT day, where a day begins at
+// 23:00 (子时), plus the 1h-shifted clock used to derive the date and slot.
+// The classic and modern pages share it so their daily totals agree.
+func bjtDayStart(now time.Time) (shifted, dayStart time.Time) {
+	// Shifting by an hour makes 23:00 the start of the next day's slot 0.
+	shifted = now.In(quotaLocation).Add(time.Hour)
+	dayStart = time.Date(shifted.Year(), shifted.Month(), shifted.Day(), 0, 0, 0, 0, quotaLocation).Add(-time.Hour)
+	return
+}
+
 func (h *portalOutbound) renderWeeklyHistory(snapshot UserSnapshot) string {
+	return h.renderWeeklyHistoryAt(snapshot, time.Now())
+}
+
+func (h *portalOutbound) renderWeeklyHistoryAt(snapshot UserSnapshot, now time.Time) string {
 	if h.manager.history == nil {
 		return ""
 	}
-	now := time.Now().UTC()
-	end := now.Truncate(24 * time.Hour).Add(24 * time.Hour)
+	_, todayStart := bjtDayStart(now)
+	end := todayStart.AddDate(0, 0, 1)
 	start := end.AddDate(0, 0, -7)
 	points, err := h.manager.history.Query(h.ctx, HistoryQuery{
-		From: start, To: end, Granularity: "day",
+		From: start, To: end, Granularity: "hour",
 		InboundTag: snapshot.InboundTag, UserName: snapshot.UserName,
 	})
 	if err != nil {
 		h.logger.Error("query weekly quota history: ", err)
 		return ""
 	}
-	byDay := make(map[int64]HistoryPoint, len(points))
+	daily := make([]HistoryPoint, 7)
 	var maximum int64
 	var weeklyTotal int64
 	for _, point := range points {
-		byDay[point.BucketStart] = point
+		index := (point.BucketStart - start.Unix()) / 86400
+		if index < 0 || index >= int64(len(daily)) {
+			continue
+		}
+		daily[index].UplinkBytes += point.UplinkBytes
+		daily[index].DownlinkBytes += point.DownlinkBytes
+		daily[index].UsedBytes += point.UsedBytes
+		weeklyTotal += point.UsedBytes
+	}
+	for _, point := range daily {
 		if point.UsedBytes > maximum {
 			maximum = point.UsedBytes
 		}
-		weeklyTotal += point.UsedBytes
 	}
 	var bars strings.Builder
-	for day := start; day.Before(end); day = day.AddDate(0, 0, 1) {
-		point := byDay[day.Unix()]
+	for i, point := range daily {
+		// A day starts at 23:00, so its date is that of the following hour.
+		day := start.AddDate(0, 0, i).Add(time.Hour)
 		uplinkHeight, downlinkHeight := 0.0, 0.0
 		if maximum > 0 {
 			uplinkHeight = float64(point.UplinkBytes) / float64(maximum) * 100
@@ -793,7 +816,7 @@ func (h *portalOutbound) renderWeeklyHistory(snapshot UserSnapshot) string {
 	return fmt.Sprintf(`<div class="history-section">
   <div class="history-header"><div><div class="form-section-title" data-i18n="Last 7 days">Last 7 days</div><div class="history-total">%s</div></div><div class="history-legend"><span class="legend-dot download"></span><span data-i18n="Down">Down</span> <span class="legend-dot upload"></span><span data-i18n="Up">Up</span></div></div>
   <div class="history-chart" role="img" aria-label="Daily traffic usage for the last seven days">%s</div>
-  <div class="history-note" data-i18n="Daily totals · UTC · updates every minute">Daily totals · UTC · updates every minute</div>
+  <div class="history-note" data-i18n="Daily totals · BJT · updates every minute">Daily totals · BJT · updates every minute</div>
 </div>`, formatBytes(weeklyTotal), bars.String())
 }
 
@@ -1275,7 +1298,7 @@ func formatBytes(b int64) string {
 
 const portalLanguageScript = `
 <script>
-var quotaTranslations={"Traffic Quota": "流量配额", "Remaining": "剩余流量", "Upload": "上传", "Download": "下载", "Last 7 days": "最近 7 天", "Down": "下载", "Up": "上传", "Daily totals · UTC · updates every minute": "每日汇总 · UTC · 每分钟更新", "Reset quota": "重置配额", "Subscription": "订阅", "Scan with your client, or copy the link": "使用客户端扫码，或复制订阅链接", "Copy link": "复制链接", "Copied": "已复制", "Custom Outbound": "自定义出站", "Remove": "移除", "Server": "服务器", "Port": "端口", "Method": "加密方式", "Password": "密码", "Mux": "多路复用", "Padding": "填充", "Test": "测试", "Save": "保存", "Testing…": "测试中…", "Request failed": "请求失败", "Unknown error": "未知错误", "ACTIVE": "正常", "BLOCKED": "已停用", "of": "/", "used": "已使用", "Mon": "周一", "Tue": "周二", "Wed": "周三", "Thu": "周四", "Fri": "周五", "Sat": "周六", "Sun": "周日", "Forbidden": "无权访问", "Bad request": "请求无效", "Not found": "未找到", "User not found": "未找到用户", "Missing inbound tag or user name": "缺少入站标签或用户名", "No quota configured.": "尚未配置配额。", "No quota data available.": "暂无配额数据。", "Invalid Shadowsocks outbound": "Shadowsocks 出站配置无效", "Failed to save": "保存失败", "Delete custom outbound failed": "移除自定义出站失败", "Connection settings": "连接设置", "Traffic usage": "流量使用情况", "Daily traffic usage for the last seven days": "最近七天的每日流量使用情况", "ss:// QR code": "ss:// 订阅二维码", "Saved with warning": "已保存，但有警告", "Quota": "配额"};
+var quotaTranslations={"Traffic Quota": "流量配额", "Remaining": "剩余流量", "Upload": "上传", "Download": "下载", "Last 7 days": "最近 7 天", "Down": "下载", "Up": "上传", "Daily totals · BJT · updates every minute": "每日汇总 · 北京时间 · 每分钟更新", "Reset quota": "重置配额", "Subscription": "订阅", "Scan with your client, or copy the link": "使用客户端扫码，或复制订阅链接", "Copy link": "复制链接", "Copied": "已复制", "Custom Outbound": "自定义出站", "Remove": "移除", "Server": "服务器", "Port": "端口", "Method": "加密方式", "Password": "密码", "Mux": "多路复用", "Padding": "填充", "Test": "测试", "Save": "保存", "Testing…": "测试中…", "Request failed": "请求失败", "Unknown error": "未知错误", "ACTIVE": "正常", "BLOCKED": "已停用", "of": "/", "used": "已使用", "Mon": "周一", "Tue": "周二", "Wed": "周三", "Thu": "周四", "Fri": "周五", "Sat": "周六", "Sun": "周日", "Forbidden": "无权访问", "Bad request": "请求无效", "Not found": "未找到", "User not found": "未找到用户", "Missing inbound tag or user name": "缺少入站标签或用户名", "No quota configured.": "尚未配置配额。", "No quota data available.": "暂无配额数据。", "Invalid Shadowsocks outbound": "Shadowsocks 出站配置无效", "Failed to save": "保存失败", "Delete custom outbound failed": "移除自定义出站失败", "Connection settings": "连接设置", "Traffic usage": "流量使用情况", "Daily traffic usage for the last seven days": "最近七天的每日流量使用情况", "ss:// QR code": "ss:// 订阅二维码", "Saved with warning": "已保存，但有警告", "Quota": "配额"};
 quotaTranslations.savedWarning='出站已保存并启用，但连接测试失败：';
 quotaTranslations.warningHelp='如果服务器可以正常使用，可忽略此提示；否则请使用“测试”重新检查。';
 quotaTranslations.Back='返回';
