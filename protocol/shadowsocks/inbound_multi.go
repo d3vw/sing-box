@@ -146,6 +146,7 @@ func (h *MultiInbound) QuotaUsers() []adapter.QuotaUser {
 				Name:             u.Name,
 				QuotaBytes:       quotaBytes,
 				Admin:            u.Admin,
+				Validity:         u.QuotaValidity,
 				Method:           h.method,
 				ServerPassword:   h.serverPassword,
 				UserPassword:     u.Password,

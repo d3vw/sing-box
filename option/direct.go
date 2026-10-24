@@ -14,6 +14,7 @@ type DirectInboundOptions struct {
 	OverrideAddress string                   `json:"override_address,omitempty"`
 	OverridePort    uint16                   `json:"override_port,omitempty"`
 	QuotaBytes      *byteformats.MemoryBytes `json:"quota_bytes,omitempty"`
+	QuotaValidity
 }
 
 type _DirectOutboundOptions struct {

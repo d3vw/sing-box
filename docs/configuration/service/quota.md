@@ -79,6 +79,31 @@ user identity and is not tracked. Each quota user must have a non-empty `name`,
 which is used as the quota key. Set `admin` to `true` to mark a user exempt from
 the quota while still tracking their usage.
 
+A quota user (or a `direct` inbound with `quota_bytes`) can also set a service
+period with `start_date` and `validity`; the portal then shows the user when
+their service expires and how many days are left:
+
+```json
+{
+  "name": "alice",
+  "password": "...",
+  "quota_bytes": "500GB",
+  "start_date": "2026-10-01",
+  "validity": "quarter"
+}
+```
+
+`start_date` is a `YYYY-MM-DD` date in Beijing time. `validity` is one of
+`month`, `quarter`, `half_year` or `year`. The period ends at 00:00 Beijing time
+that many months after `start_date` (clamped to the month's last day), so the
+example above is valid through 2026-12-31. Both fields must be set together. The
+period is for display only: connections are not rejected once it has passed.
+To renew, move `start_date` forward.
+
+With a service period, the portal shows the daily allowance and the run-out
+forecast up to expiry even without `reset_day`; with both, whichever comes
+first is used.
+
 #### cache_path
 
 If set, usage counters are saved to the specified JSON file and restored on the next startup.

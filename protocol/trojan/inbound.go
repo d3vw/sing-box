@@ -128,7 +128,7 @@ func (h *Inbound) QuotaUsers() []adapter.QuotaUser {
 			quotaBytes = int64(u.QuotaBytes.Value())
 		}
 		if quotaBytes > 0 || u.Admin {
-			result = append(result, adapter.QuotaUser{Name: u.Name, QuotaBytes: quotaBytes, Admin: u.Admin})
+			result = append(result, adapter.QuotaUser{Name: u.Name, QuotaBytes: quotaBytes, Admin: u.Admin, Validity: u.QuotaValidity})
 		}
 	}
 	return result

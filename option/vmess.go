@@ -16,6 +16,7 @@ type VMessUser struct {
 	AlterId    int                      `json:"alterId,omitempty"`
 	QuotaBytes *byteformats.MemoryBytes `json:"quota_bytes,omitempty"`
 	Admin      bool                     `json:"admin,omitempty"`
+	QuotaValidity
 }
 
 type VMessOutboundOptions struct {

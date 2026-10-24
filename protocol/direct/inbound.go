@@ -34,16 +34,18 @@ type Inbound struct {
 	overrideOption      int
 	overrideDestination M.Socksaddr
 	quotaBytes          *byteformats.MemoryBytes
+	quotaValidity       option.QuotaValidity
 }
 
 func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.DirectInboundOptions) (adapter.Inbound, error) {
 	options.UDPFragmentDefault = true
 	inbound := &Inbound{
-		Adapter:    inbound.NewAdapter(C.TypeDirect, tag),
-		ctx:        ctx,
-		router:     router,
-		logger:     logger,
-		quotaBytes: options.QuotaBytes,
+		Adapter:       inbound.NewAdapter(C.TypeDirect, tag),
+		ctx:           ctx,
+		router:        router,
+		logger:        logger,
+		quotaBytes:    options.QuotaBytes,
+		quotaValidity: options.QuotaValidity,
 	}
 	if options.OverrideAddress != "" && options.OverridePort != 0 {
 		inbound.overrideOption = 1
@@ -93,7 +95,7 @@ func (i *Inbound) QuotaUsers() []adapter.QuotaUser {
 	if i.quotaBytes == nil || i.quotaBytes.Value() == 0 {
 		return nil
 	}
-	return []adapter.QuotaUser{{Name: adapter.QuotaInboundUser, QuotaBytes: int64(i.quotaBytes.Value())}}
+	return []adapter.QuotaUser{{Name: adapter.QuotaInboundUser, QuotaBytes: int64(i.quotaBytes.Value()), Validity: i.quotaValidity}}
 }
 
 func (i *Inbound) NewPacket(buffer *buf.Buffer, source M.Socksaddr) {

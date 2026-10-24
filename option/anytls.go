@@ -17,6 +17,7 @@ type AnyTLSUser struct {
 	Password   string                   `json:"password,omitempty"`
 	QuotaBytes *byteformats.MemoryBytes `json:"quota_bytes,omitempty"`
 	Admin      bool                     `json:"admin,omitempty"`
+	QuotaValidity
 }
 
 type AnyTLSOutboundOptions struct {

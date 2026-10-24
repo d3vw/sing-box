@@ -60,6 +60,7 @@ type Service struct {
 	historyTicker  *time.Ticker
 	historyWG      sync.WaitGroup
 	resetTicker    *time.Ticker
+	monthlyResetTicker *time.Ticker
 
 	subscriptionServer string
 	subscriptionPort   uint16
@@ -153,6 +154,9 @@ func (s *Service) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 		for _, ib := range inboundManager.Inbounds() {
 			if provider, ok := ib.(adapter.QuotaUserProvider); ok {
 				for _, u := range provider.QuotaUsers() {
+					if _, _, err := expiresAt(u.Validity); err != nil {
+						return E.Cause(err, "quota user ", ib.Tag(), "/", u.Name)
+					}
 					if s.subscriptionServer != "" {
 						u.SubscriptionServer = s.subscriptionServer
 					}
@@ -179,6 +183,13 @@ func (s *Service) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 		}
 		s.resetTicker = time.NewTicker(time.Minute)
 		go s.loopResetCycle()
+	}
+	if s.manager.HasMonthlyQuotas() {
+		if s.manager.RollMonthlyQuotas(time.Now()) {
+			s.logger.Info("monthly user quota cycle rolled over while stopped, usage reset")
+		}
+		s.monthlyResetTicker = time.NewTicker(time.Minute)
+		go s.loopMonthlyResetCycle()
 	}
 	if s.cachePath != "" {
 		s.saveTicker = time.NewTicker(time.Minute)
@@ -246,6 +257,23 @@ func (s *Service) loopResetCycle() {
 	}
 }
 
+func (s *Service) loopMonthlyResetCycle() {
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case now := <-s.monthlyResetTicker.C:
+			if !s.manager.RollMonthlyQuotas(now) {
+				continue
+			}
+			s.logger.Info("monthly user quota cycle rolled over, usage reset")
+			if err := s.saveCache(); err != nil {
+				s.logger.Error(E.Cause(err, "save cache"))
+			}
+		}
+	}
+}
+
 func (s *Service) loopHistory() {
 	defer s.historyWG.Done()
 	for {
@@ -272,6 +300,9 @@ func (s *Service) Close() error {
 	}
 	if s.resetTicker != nil {
 		s.resetTicker.Stop()
+	}
+	if s.monthlyResetTicker != nil {
+		s.monthlyResetTicker.Stop()
 	}
 	s.historyWG.Wait()
 	if s.history != nil {

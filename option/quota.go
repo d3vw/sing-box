@@ -32,3 +32,11 @@ type QuotaPortalOutboundOptions struct {
 	// landing servers can actually reach (e.g. http://cp.cloudflare.com).
 	ConnectivityTestURL string `json:"connectivity_test_url,omitempty"`
 }
+
+// QuotaValidity is a quota user's service period, shown on the portal: it
+// runs Validity (month, quarter, half_year or year) from StartDate
+// (YYYY-MM-DD, Beijing time).
+type QuotaValidity struct {
+	StartDate string `json:"start_date,omitempty"`
+	Validity  string `json:"validity,omitempty"`
+}

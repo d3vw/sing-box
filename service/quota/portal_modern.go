@@ -52,6 +52,7 @@ type modernPage struct {
 	Title        string
 	Self         *modernUser
 	Reset        *modernReset
+	Expiry       *modernExpiry
 	Forecast     *modernForecast
 	Daily        *modernDaily
 	Heat         *modernHeat
@@ -66,6 +67,7 @@ type modernPage struct {
 
 type modernData struct {
 	Reset    *modernReset    `json:"reset"`
+	Expiry   *modernExpiry   `json:"expiry"`
 	Forecast *modernForecast `json:"forecast"`
 	Daily    *modernDaily    `json:"daily"`
 	Heat     *modernHeat     `json:"heat"`
@@ -90,6 +92,10 @@ type modernUser struct {
 	Ticks       [5]string
 	// Tone colors the ruler pointer after the forecast: ok, warn or err.
 	Tone string
+	// ValidUntil is the last day of the service period (YYYY-MM-DD), empty
+	// without one; Expired is set once it has passed.
+	ValidUntil string
+	Expired    bool
 }
 
 type modernReset struct {
@@ -98,11 +104,25 @@ type modernReset struct {
 	DaysLeft int `json:"left"`
 }
 
+// modernExpiry is the last day of the user's service period.
+type modernExpiry struct {
+	Year     int    `json:"y"`
+	Month    int    `json:"m"`
+	Day      int    `json:"d"`
+	DaysLeft int    `json:"left"`
+	Tone     string `json:"-"`
+}
+
+// expiryWarnDays is how close to expiry the portal starts warning.
+const expiryWarnDays = 7
+
 type modernForecast struct {
 	Tone   string  `json:"tone"`
 	RunOut float64 `json:"p"`
 	Left   string  `json:"left"`
 	PerDay string  `json:"perDay"`
+	// End is what the forecast runs to: reset or expiry.
+	End string `json:"end"`
 	// From and To are the month and day the quota likely runs out between.
 	From *[2]int `json:"from"`
 	To   *[2]int `json:"to"`
@@ -196,20 +216,43 @@ func (h *portalOutbound) renderModern(inboundTag, userName string, isAdmin bool)
 func (h *portalOutbound) renderModernAt(inboundTag, userName string, isAdmin bool, now time.Time) string {
 	page := modernPage{Title: inboundTag + " / " + userName}
 	if snapshot, ok := h.manager.Snapshot(inboundTag, userName); ok {
-		user := newModernUser(snapshot)
+		user := newModernUser(snapshot, now)
 		page.Self = &user
+		if snapshot.ExpiresAt != 0 {
+			lastDay, left := validUntil(time.Unix(snapshot.ExpiresAt, 0), now)
+			lastDay = lastDay.In(quotaLocation)
+			page.Expiry = &modernExpiry{Year: lastDay.Year(), Month: int(lastDay.Month()), Day: lastDay.Day(), DaysLeft: left, Tone: "ok"}
+			if left == 0 {
+				page.Expiry.Tone = "err"
+			} else if left <= expiryWarnDays {
+				page.Expiry.Tone = "warn"
+			}
+		}
 		resetAt, hasReset := h.manager.NextReset(now)
-		daysLeft := 0
 		if hasReset {
-			daysLeft = int(math.Ceil(resetAt.Sub(now).Hours() / 24))
 			local := resetAt.In(quotaLocation)
-			page.Reset = &modernReset{Month: int(local.Month()), Day: local.Day(), DaysLeft: daysLeft}
+			page.Reset = &modernReset{Month: int(local.Month()), Day: local.Day(), DaysLeft: int(math.Ceil(resetAt.Sub(now).Hours() / 24))}
+		}
+		// The forecast and daily budget run to the reset or the end of the
+		// service period, whichever comes first.
+		endAt, hasEnd, endKind := resetAt, hasReset, "reset"
+		if snapshot.ExpiresAt != 0 {
+			if expiry := time.Unix(snapshot.ExpiresAt, 0); expiry.After(now) && (!hasEnd || expiry.Before(endAt)) {
+				endAt, hasEnd, endKind = expiry, true, "expiry"
+			}
+		}
+		daysLeft := 0
+		if hasEnd {
+			daysLeft = int(math.Ceil(endAt.Sub(now).Hours() / 24))
 		}
 		if usage, ok := h.shichenUsage(inboundTag, userName, now); ok {
 			page.Heat, page.Data.VsUsual = newModernHeat(usage)
-			page.Daily = newModernDaily(usage, snapshot.RemainingBytes, daysLeft, hasReset)
-			if hasReset {
-				page.Forecast = newModernForecast(usage, snapshot.RemainingBytes, daysLeft, now, resetAt)
+			page.Daily = newModernDaily(usage, snapshot.RemainingBytes, daysLeft, hasEnd)
+			if hasEnd {
+				page.Forecast = newModernForecast(usage, snapshot.RemainingBytes, daysLeft, now, endAt)
+				if page.Forecast != nil {
+					page.Forecast.End = endKind
+				}
 			}
 		}
 		if page.Forecast != nil {
@@ -226,12 +269,13 @@ func (h *portalOutbound) renderModernAt(inboundTag, userName string, isAdmin boo
 	}
 	if isAdmin {
 		for _, s := range h.manager.Snapshots() {
-			page.Users = append(page.Users, newModernUser(s))
+			page.Users = append(page.Users, newModernUser(s, now))
 		}
 	}
 	if page.Self == nil && len(page.Users) == 0 {
 		page.Message = `<div class="card">No quota configured.</div>`
 	}
+	page.Data.Expiry = page.Expiry
 	page.Data.Reset, page.Data.Forecast, page.Data.Daily, page.Data.Heat = page.Reset, page.Forecast, page.Daily, page.Heat
 	return executeModernPage(page)
 }
@@ -244,7 +288,7 @@ func executeModernPage(page modernPage) string {
 	return sb.String()
 }
 
-func newModernUser(s UserSnapshot) modernUser {
+func newModernUser(s UserSnapshot, now time.Time) modernUser {
 	usedPct := 0.0
 	if s.QuotaBytes > 0 {
 		usedPct = float64(s.UsedBytes) / float64(s.QuotaBytes) * 100
@@ -275,6 +319,11 @@ func newModernUser(s UserSnapshot) modernUser {
 		user.Ticks[i] = strconv.FormatFloat(math.Round(quotaGB*float64(i)/4*10)/10, 'f', -1, 64)
 	}
 	user.Ticks[4] += " GB"
+	if s.ExpiresAt != 0 {
+		lastDay, left := validUntil(time.Unix(s.ExpiresAt, 0), now)
+		user.ValidUntil = lastDay.In(quotaLocation).Format(time.DateOnly)
+		user.Expired = left == 0
+	}
 	return user
 }
 

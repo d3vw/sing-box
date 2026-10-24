@@ -102,6 +102,7 @@ func (h *Inbound) QuotaUsers() []adapter.QuotaUser {
 				Name:             u.Name,
 				QuotaBytes:       quotaBytes,
 				Admin:            u.Admin,
+				Validity:         u.QuotaValidity,
 				Type:             "anytls",
 				UserPassword:     u.Password,
 				SubscriptionPort: h.subscriptionPort,

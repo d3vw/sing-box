@@ -40,6 +40,8 @@ type QuotaUser struct {
 	// UserPassword and ServerName.
 	Type       string
 	ServerName string
+
+	Validity option.QuotaValidity
 }
 
 type QuotaUserProvider interface {

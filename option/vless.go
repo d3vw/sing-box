@@ -16,6 +16,7 @@ type VLESSUser struct {
 	Flow       string                   `json:"flow,omitempty"`
 	QuotaBytes *byteformats.MemoryBytes `json:"quota_bytes,omitempty"`
 	Admin      bool                     `json:"admin,omitempty"`
+	QuotaValidity
 }
 
 type VLESSOutboundOptions struct {

@@ -116,6 +116,8 @@ b{font-weight:600}
 .remain-n{font-size:clamp(60px,7.5cqi,104px);line-height:.95;font-weight:600;letter-spacing:-.02em;font-stretch:118%}
 .remain-u{font-size:clamp(20px,2.2cqi,28px);font-weight:500;color:var(--mute)}
 .reset-line{margin-top:8px;font-size:14px;color:var(--mute)}
+.reset-line+.reset-line{margin-top:2px}
+.expiry-line.warn{color:var(--warn)}.expiry-line.err{color:var(--err)}
 
 /* 预测标签 */
 .fc-tag.fc-m{display:none}
@@ -308,6 +310,8 @@ button.peak{margin:-8px -2px;padding:8px 2px;font-size:inherit;-webkit-tap-highl
 .u-name{display:flex;align-items:center;gap:8px;min-width:0}
 .u-user{font-family:var(--num);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .u-blk{font-size:12px;color:var(--err);white-space:nowrap}
+.u-exp{font-family:var(--num);font-size:12px;color:var(--mute);white-space:nowrap}
+.u-exp.bad{color:var(--err)}
 .u-usage{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--ink2)}
 .u-bar{height:4px;border-radius:2px;background:var(--heat-empty);overflow:hidden}
 .u-bar i{display:block;height:100%;width:var(--p);background:var(--accent)}
@@ -425,7 +429,7 @@ button.peak{margin:-8px -2px;padding:8px 2px;font-size:inherit;-webkit-tap-highl
       <span class="hd-div" aria-hidden="true"></span>
       <span class="hd-node">{{.UserName}}</span>
       <span class="tag">{{.InboundTag}}</span>
-      <span class="status {{if .Blocked}}bad{{else}}ok{{end}}"><i></i><span data-i18n="{{if .Blocked}}blocked{{else}}healthy{{end}}">{{if .Blocked}}已超额{{else}}正常{{end}}</span></span>
+      <span class="status {{if or .Expired .Blocked}}bad{{else}}ok{{end}}"><i></i>{{if .Expired}}<span data-i18n="expired">已到期</span>{{else}}<span data-i18n="{{if .Blocked}}blocked{{else}}healthy{{end}}">{{if .Blocked}}已超额{{else}}正常{{end}}</span>{{end}}</span>
     </div>
     {{end}}
   </div>
@@ -451,6 +455,7 @@ button.peak{margin:-8px -2px;padding:8px 2px;font-size:inherit;-webkit-tap-highl
         </div>
         <div class="remain-v num"><span class="remain-n">{{.RemainingGB}}</span><span class="remain-u">GB</span></div>
         {{with $.Reset}}<span class="reset-line" id="reset-line"></span>{{end}}
+        {{with $.Expiry}}<span class="reset-line expiry-line {{.Tone}}" id="expiry-line"></span>{{end}}
         {{with $.Forecast}}<p class="fc-basis fc-basis-m" id="fc-basis-m" hidden></p>{{end}}
       </div>
       {{with $.Forecast}}
@@ -566,7 +571,7 @@ button.peak{margin:-8px -2px;padding:8px 2px;font-size:inherit;-webkit-tap-highl
   <div class="group">
     {{range .}}
     <div class="urow">
-      <div class="u-name"><span class="u-user">{{.UserName}}</span><span class="tag">{{.InboundTag}}</span>{{if .Blocked}}<span class="u-blk" data-i18n="blocked">已超额</span>{{end}}</div>
+      <div class="u-name"><span class="u-user">{{.UserName}}</span><span class="tag">{{.InboundTag}}</span>{{if .Blocked}}<span class="u-blk" data-i18n="blocked">已超额</span>{{end}}{{if .ValidUntil}}<span class="u-exp{{if .Expired}} bad{{end}}" data-i18n="{{if .Expired}}expiredOn{{else}}validTo{{end}}" data-a="{{.ValidUntil}}">{{if .Expired}}{{.ValidUntil}} 到期{{else}}至 {{.ValidUntil}}{{end}}</span>{{end}}</div>
       <div class="u-usage"><span class="num">{{.Used}} / {{.Quota}}</span><div class="u-bar" style="{{.Ruler}}"><i></i></div></div>
       <form method="post" action="/quota/reset" data-confirm="resetConfirm"><input type="hidden" name="tag" value="{{.InboundTag}}"><input type="hidden" name="name" value="{{.UserName}}"><button type="submit" class="chip" data-i18n="reset">重置</button></form>
     </div>
@@ -589,14 +594,16 @@ var D={
     healthy:"正常",blocked:"已超额",remaining:"剩余",upload:"上传",download:"下载",
     used:function(a,b){return "已用 "+a+" · "+b+"%"},
     resetsOn:function(m,d,left){return m+" 月 "+d+" 日重置，"+(left===0?"今天":"还有 "+left+" 天")},
+    expired:"已到期",validTo:function(d){return "至 "+d},expiredOn:function(d){return d+" 到期"},
+    expiresOn:function(y,m,d,left){var day=y+" 年 "+m+" 月 "+d+" 日";return left===0?"已于 "+day+"到期":"有效期至 "+day+"，"+(left===1?"今天是最后一天":"还剩 "+left+" 天")},
     tone:{ok:"够用",warn:"可能不够",err:"不够用"},
-    fcLeft:function(v){return "重置时约剩 "+v},
+    fcLeft:function(v,e){return (e==="expiry"?"到期":"重置")+"时约剩 "+v},
     fcChance:function(p){return "约 "+chanceZh(p)+" 成可能提前用完"},
     fcDate:function(r){return "预计 "+r+"用完"},
     dateRange:function(a,b){return a[0]===b[0]&&a[1]===b[1]?a[0]+" 月 "+a[1]+" 日":a[0]===b[0]?a[0]+" 月 "+a[1]+"–"+b[1]+" 日":a[0]+" 月 "+a[1]+" 日–"+b[0]+" 月 "+b[1]+" 日"},
     basisToggle:"查看每天可用量",
-    basisLeft:function(p50,per){return ["重置时还剩 ",{b:p50}," 以上；按现在剩的量，每天可用约 ",{b:per}]},
-    basisRunOut:function(p,per){return ["约 "+chanceZh(p)+" 成可能在重置前用完；想撑到重置，每天最多用约 ",{b:per}]},
+    basisLeft:function(p50,per,e){return [(e==="expiry"?"到期":"重置")+"时还剩 ",{b:p50}," 以上；按现在剩的量，每天可用约 ",{b:per}]},
+    basisRunOut:function(p,per,e){var w=e==="expiry"?"到期":"重置";return ["约 "+chanceZh(p)+" 成可能在"+w+"前用完；想撑到"+w+"，每天最多用约 ",{b:per}]},
     wd:WD_ZH,wdShort:["日","一","二","三","四","五","六"],today:"今天",todayShort:"今",
     dayLabel:function(m,d,w){return m+" 月 "+d+" 日 "+WD_ZH[w]},
     dailyTitle:"每天用量",lastDays:function(n){return "最近 "+n+" 天"},statAvg:"日均",statPeak:"最多",budgetLabel:"每天可用",
@@ -623,14 +630,16 @@ var D={
     healthy:"Online",blocked:"Over quota",remaining:"Remaining",upload:"Upload",download:"Download",
     used:function(a,b){return "Used "+a+" · "+b+"%"},
     resetsOn:function(m,d,left){return "Resets "+md([m,d])+", "+(left===0?"today":left+" day"+(left===1?"":"s")+" left")},
+    expired:"Expired",validTo:function(d){return "until "+d},expiredOn:function(d){return "expired "+d},
+    expiresOn:function(y,m,d,left){var day=md([m,d])+", "+y;return left===0?"Expired "+day:"Valid through "+day+", "+(left===1?"last day today":left+" days left")},
     tone:{ok:"On track",warn:"May run out",err:"Running out"},
-    fcLeft:function(v){return "~"+v+" left at reset"},
+    fcLeft:function(v,e){return "~"+v+" left at "+(e==="expiry"?"expiry":"reset")},
     fcChance:function(p){return "~"+chanceEn(p)+"% chance to run out early"},
     fcDate:function(r){return "likely out "+r},
     dateRange:function(a,b){return a[0]===b[0]&&a[1]===b[1]?md(a):a[0]===b[0]?md(a)+"–"+b[1]:md(a)+" – "+md(b)},
     basisToggle:"Show daily allowance",
-    basisLeft:function(p50,per){return [{b:p50}," or more left at reset; at this rate you can use about ",{b:per}," a day"]},
-    basisRunOut:function(p,per){return ["About "+chanceEn(p)+"% chance to run out before reset; to last, keep to about ",{b:per}," a day"]},
+    basisLeft:function(p50,per,e){return [{b:p50}," or more left at "+(e==="expiry"?"expiry":"reset")+"; at this rate you can use about ",{b:per}," a day"]},
+    basisRunOut:function(p,per,e){return ["About "+chanceEn(p)+"% chance to run out before "+(e==="expiry"?"expiry":"reset")+"; to last, keep to about ",{b:per}," a day"]},
     wd:WD_EN,wdShort:WD_EN,today:"Today",todayShort:"Now",
     dayLabel:function(m,d,w){return WD_EN[w]+", "+md([m,d])},
     dailyTitle:"Daily usage",lastDays:function(n){return "Last "+n+" days"},statAvg:"Daily avg",statPeak:"Peak",budgetLabel:"Daily budget",
@@ -695,6 +704,7 @@ function render(){
     u.appendChild(el("span","err",t.refreshFailed));
     var b=el("button",null,t.retry);b.type="button";b.onclick=refresh;u.appendChild(b);
   });
+  if(Q.expiry&&$("expiry-line"))$("expiry-line").textContent=t.expiresOn(Q.expiry.y,Q.expiry.m,Q.expiry.d,Q.expiry.left);
   if(Q.reset&&$("reset-line"))$("reset-line").textContent=t.resetsOn(Q.reset.m,Q.reset.d,Q.reset.left);
   renders.forEach(function(fn){fn()});
 }
@@ -737,9 +747,9 @@ function dismissable(box,isOpen,close){
 if(Q.forecast){
   var F=Q.forecast;
   onRender(function(){
-    var detail=F.tone==="ok"?t.fcLeft(F.left):F.tone==="warn"||!F.from?t.fcChance(F.p):t.fcDate(t.dateRange(F.from,F.to));
+    var detail=F.tone==="ok"?t.fcLeft(F.left,F.end):F.tone==="warn"||!F.from?t.fcChance(F.p):t.fcDate(t.dateRange(F.from,F.to));
     all(".fc-tag").forEach(function(b){b.querySelector(".fc-t").textContent=t.tone[F.tone];b.querySelector(".fc-x").textContent=detail;b.title=t.basisToggle});
-    all(".fc-basis").forEach(function(p){rich(p,F.tone==="ok"?t.basisLeft(F.left,F.perDay):t.basisRunOut(F.p,F.perDay))});
+    all(".fc-basis").forEach(function(p){rich(p,F.tone==="ok"?t.basisLeft(F.left,F.perDay,F.end):t.basisRunOut(F.p,F.perDay,F.end))});
   });
   (function(){
     var box=$("fc-d"),tag=box.querySelector(".fc-tag"),pop=$("fc-basis-d"),hover=false,pinned=false,timer=0;

@@ -127,7 +127,7 @@ func TestPortalModernHeatmapStartsDayAtZiShi(t *testing.T) {
 }
 
 func TestModernUIUsesBinaryUnits(t *testing.T) {
-	user := newModernUser(UserSnapshot{QuotaBytes: 200 << 30, UsedBytes: 1 << 30, RemainingBytes: 199 << 30, UplinkBytes: 512 << 20, DownlinkBytes: 3 << 29})
+	user := newModernUser(UserSnapshot{QuotaBytes: 200 << 30, UsedBytes: 1 << 30, RemainingBytes: 199 << 30, UplinkBytes: 512 << 20, DownlinkBytes: 3 << 29}, time.Now())
 	if user.RemainingGB != "199.00" || user.Quota != "200.00 GB" || user.Used != "1.00 GB" || user.Upload != "512.00 MB" || user.Download != "1.50 GB" || user.Ticks[4] != "200 GB" {
 		t.Fatalf("unexpected sizes: %+v", user)
 	}

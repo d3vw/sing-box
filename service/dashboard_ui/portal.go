@@ -45,6 +45,13 @@ func newPortalOutbound(ctx context.Context, router adapter.Router, logger log.Co
 	}, nil
 }
 
+func (h *portalOutbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {
+	if stage == adapter.StartStatePostStart {
+		return h.PostStart()
+	}
+	return nil
+}
+
 func (h *portalOutbound) PostStart() error {
 	h.listener = newChanListener()
 	h.httpServer = &http.Server{Handler: h.buildHandler()}

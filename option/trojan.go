@@ -17,6 +17,7 @@ type TrojanUser struct {
 	Password   string                   `json:"password"`
 	QuotaBytes *byteformats.MemoryBytes `json:"quota_bytes,omitempty"`
 	Admin      bool                     `json:"admin,omitempty"`
+	QuotaValidity
 }
 
 type TrojanOutboundOptions struct {

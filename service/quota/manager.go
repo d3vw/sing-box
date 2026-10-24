@@ -47,6 +47,13 @@ type UserState struct {
 	// (and fallback host) for anytls links.
 	Type       string
 	ServerName string
+
+	// ExpiresAt ends the user's service period; zero means none.
+	ExpiresAt time.Time
+	// MonthlyQuota refreshes usage each month from StartDate.
+	MonthlyQuota bool
+	StartDate     time.Time
+	CycleStart    atomic.Int64
 }
 
 // SubscriptionURI builds this user's ss:// link (SIP002), or returns
@@ -97,6 +104,10 @@ type UserSnapshot struct {
 	QuotaBytes     int64  `json:"quota_bytes"`
 	RemainingBytes int64  `json:"remaining_bytes"`
 	Blocked        bool   `json:"blocked"`
+	// ExpiresAt is the Unix second the service period ends; 0 means none.
+	ExpiresAt int64 `json:"expires_at,omitempty"`
+	// ResetAt is the Unix second the user's traffic quota refreshes; 0 means none.
+	ResetAt int64 `json:"reset_at,omitempty"`
 }
 
 type Manager struct {
@@ -203,7 +214,13 @@ func (m *Manager) AddUser(inboundTag string, user adapter.QuotaUser) {
 	if _, exists := m.users[key]; exists {
 		return
 	}
-	m.users[key] = &UserState{
+	// The service rejects an invalid period before adding the user.
+	expiry, _, _ := expiresAt(user.Validity)
+	var startDate time.Time
+	if user.Validity.StartDate != "" {
+		startDate, _ = time.ParseInLocation(time.DateOnly, user.Validity.StartDate, quotaLocation)
+	}
+	state := &UserState{
 		Key:                key,
 		QuotaBytes:         user.QuotaBytes,
 		Admin:              user.Admin,
@@ -214,7 +231,15 @@ func (m *Manager) AddUser(inboundTag string, user adapter.QuotaUser) {
 		SubscriptionPort:   user.SubscriptionPort,
 		Type:               user.Type,
 		ServerName:         user.ServerName,
+		ExpiresAt:          expiry,
+		MonthlyQuota:       user.Validity.Validity == "quarter",
+		StartDate:          startDate,
+		CycleStart:         atomic.Int64{},
 	}
+	if state.MonthlyQuota {
+		state.CycleStart.Store(monthlyQuotaCycleStart(startDate, time.Now()).Unix())
+	}
+	m.users[key] = state
 }
 
 func (m *Manager) CheckConnection(ctx context.Context, metadata adapter.InboundContext) error {
@@ -374,6 +399,14 @@ func (s *UserState) snapshot() UserSnapshot {
 	if remaining < 0 {
 		remaining = 0
 	}
+	var expiry int64
+	if !s.ExpiresAt.IsZero() {
+		expiry = s.ExpiresAt.Unix()
+	}
+	var resetAt int64
+	if s.MonthlyQuota {
+		resetAt = nextMonthlyQuotaAt(s.StartDate, s.CycleStart).Unix()
+	}
 	return UserSnapshot{
 		InboundTag:     s.Key.InboundTag,
 		UserName:       s.Key.UserName,
@@ -383,6 +416,8 @@ func (s *UserState) snapshot() UserSnapshot {
 		QuotaBytes:     s.QuotaBytes,
 		RemainingBytes: remaining,
 		Blocked:        used >= s.QuotaBytes,
+		ExpiresAt:      expiry,
+		ResetAt:        resetAt,
 	}
 }
 

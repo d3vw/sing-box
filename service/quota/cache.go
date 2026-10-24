@@ -22,6 +22,7 @@ type Cache struct {
 type UserCache struct {
 	UplinkBytes   int64 `json:"uplink_bytes"`
 	DownlinkBytes int64 `json:"downlink_bytes"`
+	CycleStart    int64 `json:"cycle_start,omitempty"`
 }
 
 func (s *Service) loadCache() error {
@@ -95,6 +96,14 @@ func (s *Service) decodeCache(cacheBinary []byte) error {
 		}
 		state.Uplink.Store(entry.Value.UplinkBytes)
 		state.Downlink.Store(entry.Value.DownlinkBytes)
+		if state.MonthlyQuota && entry.Value.CycleStart > 0 {
+			state.CycleStart.Store(entry.Value.CycleStart)
+			if time.Unix(entry.Value.CycleStart, 0).Before(monthlyQuotaCycleStart(state.StartDate, time.Now())) {
+				state.Uplink.Store(0)
+				state.Downlink.Store(0)
+				state.CycleStart.Store(monthlyQuotaCycleStart(state.StartDate, time.Now()).Unix())
+			}
+		}
 	}
 	return nil
 }
@@ -121,6 +130,7 @@ func (s *Service) encodeCache() ([]byte, error) {
 		users.Put(k.String(), &UserCache{
 			UplinkBytes:   state.Uplink.Load(),
 			DownlinkBytes: state.Downlink.Load(),
+			CycleStart:    state.CycleStart.Load(),
 		})
 	}
 	cache := &Cache{Users: users}
