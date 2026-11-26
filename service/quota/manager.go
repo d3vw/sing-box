@@ -1,0 +1,400 @@
+package quota
+
+import (
+	"context"
+	"encoding/base64"
+	"fmt"
+	"net"
+	"net/url"
+	"sort"
+	"strconv"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/sagernet/sing-box/adapter"
+	R "github.com/sagernet/sing-box/route/rule"
+	"github.com/sagernet/sing-tun"
+	"github.com/sagernet/sing/common/bufio"
+	E "github.com/sagernet/sing/common/exceptions"
+	N "github.com/sagernet/sing/common/network"
+)
+
+type UserKey struct {
+	InboundTag string
+	UserName   string
+}
+
+func (k UserKey) String() string {
+	return fmt.Sprintf("%s:%s", k.InboundTag, k.UserName)
+}
+
+type UserState struct {
+	Key        UserKey
+	QuotaBytes int64
+	Admin      bool
+	Uplink     atomic.Int64
+	Downlink   atomic.Int64
+
+	// Subscription credentials, used to render this user's ss:// link.
+	Method             string
+	ServerPassword     string
+	UserPassword       string
+	SubscriptionServer string
+	SubscriptionPort   uint16
+
+	// Type is empty for Shadowsocks or "anytls"; ServerName is the TLS SNI
+	// (and fallback host) for anytls links.
+	Type       string
+	ServerName string
+
+	// ExpiresAt ends the user's service period; zero means none.
+	ExpiresAt time.Time
+	// MonthlyQuota refreshes usage each month from StartDate.
+	MonthlyQuota bool
+	StartDate     time.Time
+	CycleStart    atomic.Int64
+}
+
+// SubscriptionURI builds this user's ss:// link (SIP002), or returns
+// ok=false if the inbound wasn't configured with enough information
+// (method, own password, and a public subscription server/port).
+func (s *UserState) SubscriptionURI() (uri string, ok bool) {
+	if s.Type == "anytls" {
+		return s.anyTLSSubscriptionURI()
+	}
+	if s.Method == "" || s.UserPassword == "" || s.SubscriptionServer == "" || s.SubscriptionPort == 0 {
+		return "", false
+	}
+	password := s.UserPassword
+	if s.ServerPassword != "" {
+		password = s.ServerPassword + ":" + s.UserPassword
+	}
+	userInfo := base64.RawURLEncoding.EncodeToString([]byte(s.Method + ":" + password))
+	return fmt.Sprintf("ss://%s@%s:%d#%s", userInfo, s.SubscriptionServer, s.SubscriptionPort, url.QueryEscape(s.Key.UserName)), true
+}
+
+// anyTLSSubscriptionURI builds an anytls://password@host:port?sni=... link.
+func (s *UserState) anyTLSSubscriptionURI() (uri string, ok bool) {
+	host := s.SubscriptionServer
+	if host == "" {
+		host = s.ServerName
+	}
+	if s.UserPassword == "" || host == "" || s.SubscriptionPort == 0 {
+		return "", false
+	}
+	u := url.URL{
+		Scheme:   "anytls",
+		User:     url.User(s.UserPassword),
+		Host:     net.JoinHostPort(host, strconv.Itoa(int(s.SubscriptionPort))),
+		Fragment: s.Key.UserName,
+	}
+	if s.ServerName != "" {
+		u.RawQuery = url.Values{"sni": {s.ServerName}}.Encode()
+	}
+	return u.String(), true
+}
+
+type UserSnapshot struct {
+	InboundTag     string `json:"inbound_tag"`
+	UserName       string `json:"user_name"`
+	UplinkBytes    int64  `json:"uplink_bytes"`
+	DownlinkBytes  int64  `json:"downlink_bytes"`
+	UsedBytes      int64  `json:"used_bytes"`
+	QuotaBytes     int64  `json:"quota_bytes"`
+	RemainingBytes int64  `json:"remaining_bytes"`
+	Blocked        bool   `json:"blocked"`
+	// ExpiresAt is the Unix second the service period ends; 0 means none.
+	ExpiresAt int64 `json:"expires_at,omitempty"`
+	// ResetAt is the Unix second the user's traffic quota refreshes; 0 means none.
+	ResetAt int64 `json:"reset_at,omitempty"`
+	// ActiveConnections counts the user's open connections, the portal's
+	// own left out.
+	ActiveConnections int `json:"active_connections"`
+}
+
+type Manager struct {
+	access  sync.RWMutex
+	users   map[UserKey]*UserState
+	conns   *connStore
+	portal  atomic.Pointer[portalHooks]
+	history *HistoryStore
+
+	resetDay    int
+	cycleAccess sync.Mutex
+	cycleStart  time.Time
+}
+
+func NewManager() *Manager {
+	return &Manager{
+		users: make(map[UserKey]*UserState),
+		conns: newConnStore(),
+	}
+}
+
+func (m *Manager) SetHistory(history *HistoryStore) {
+	m.history = history
+}
+
+func (m *Manager) historyCounters(metadata adapter.InboundContext, state *UserState) (*atomic.Int64, *atomic.Int64) {
+	if m.history == nil {
+		return nil, nil
+	}
+	target := metadata.Destination.Fqdn
+	if target == "" && metadata.Destination.Addr.IsValid() {
+		target = metadata.Destination.Addr.String()
+	}
+	protocol := metadata.Protocol
+	if protocol == "" {
+		protocol = metadata.Network
+	}
+	return m.history.Counters(HistoryDimensions{
+		InboundTag: metadata.Inbound, UserName: state.Key.UserName,
+		InboundType: metadata.InboundType, Protocol: protocol, Target: target,
+	})
+}
+
+func (m *Manager) AddUser(inboundTag string, user adapter.QuotaUser) {
+	key := UserKey{InboundTag: inboundTag, UserName: user.Name}
+	m.access.Lock()
+	defer m.access.Unlock()
+	if _, exists := m.users[key]; exists {
+		return
+	}
+	// The service rejects an invalid period before adding the user.
+	expiry, _, _ := expiresAt(user.Validity)
+	var startDate time.Time
+	if user.Validity.StartDate != "" {
+		startDate, _ = time.ParseInLocation(time.DateOnly, user.Validity.StartDate, quotaLocation)
+	}
+	state := &UserState{
+		Key:                key,
+		QuotaBytes:         user.QuotaBytes,
+		Admin:              user.Admin,
+		Method:             user.Method,
+		ServerPassword:     user.ServerPassword,
+		UserPassword:       user.UserPassword,
+		SubscriptionServer: user.SubscriptionServer,
+		SubscriptionPort:   user.SubscriptionPort,
+		Type:               user.Type,
+		ServerName:         user.ServerName,
+		ExpiresAt:          expiry,
+		MonthlyQuota:       user.Validity.Validity == "quarter",
+		StartDate:          startDate,
+		CycleStart:         atomic.Int64{},
+	}
+	if state.MonthlyQuota {
+		state.CycleStart.Store(monthlyQuotaCycleStart(startDate, time.Now()).Unix())
+	}
+	m.users[key] = state
+}
+
+func (m *Manager) CheckConnection(ctx context.Context, metadata adapter.InboundContext) error {
+	return m.checkUser(metadata.Inbound, metadata.User)
+}
+
+func (m *Manager) CheckPacketConnection(ctx context.Context, metadata adapter.InboundContext) error {
+	return m.checkUser(metadata.Inbound, metadata.User)
+}
+
+func (m *Manager) RoutedConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext, matchedRule adapter.Rule, matchOutbound adapter.Outbound) net.Conn {
+	state := m.trafficState(metadata.Inbound, metadata.User)
+	if state == nil {
+		return conn
+	}
+	tracked := m.newTrackedConn(state, N.NetworkTCP, metadata, matchedRule, matchOutbound)
+	wrapped := &quotaConn{Conn: conn, tracked: tracked}
+	tracked.closer = wrapped.Close
+	m.conns.join(tracked)
+	uplinkCounters := []*atomic.Int64{&state.Uplink, &tracked.upload}
+	downlinkCounters := []*atomic.Int64{&state.Downlink, &tracked.download}
+	if uplink, downlink := m.historyCounters(metadata, state); uplink != nil {
+		uplinkCounters = append(uplinkCounters, uplink)
+		downlinkCounters = append(downlinkCounters, downlink)
+	}
+	return bufio.NewInt64CounterConn(wrapped, uplinkCounters, downlinkCounters)
+}
+
+func (m *Manager) RoutedPacketConnection(ctx context.Context, conn N.PacketConn, metadata adapter.InboundContext, matchedRule adapter.Rule, matchOutbound adapter.Outbound) N.PacketConn {
+	state := m.trafficState(metadata.Inbound, metadata.User)
+	if state == nil {
+		return conn
+	}
+	tracked := m.newTrackedConn(state, N.NetworkUDP, metadata, matchedRule, matchOutbound)
+	wrapped := &quotaPacketConn{PacketConn: conn, tracked: tracked}
+	tracked.closer = wrapped.Close
+	m.conns.join(tracked)
+	uplinkCounters := []*atomic.Int64{&state.Uplink, &tracked.upload}
+	downlinkCounters := []*atomic.Int64{&state.Downlink, &tracked.download}
+	if uplink, downlink := m.historyCounters(metadata, state); uplink != nil {
+		uplinkCounters = append(uplinkCounters, uplink)
+		downlinkCounters = append(downlinkCounters, downlink)
+	}
+	return bufio.NewInt64CounterPacketConn(wrapped, uplinkCounters, nil, downlinkCounters, nil)
+}
+
+func (m *Manager) RoutedFlow(ctx context.Context, metadata adapter.InboundContext, matchedRule adapter.Rule, matchOutbound adapter.Outbound) tun.FlowTracker {
+	state := m.trafficState(metadata.Inbound, metadata.User)
+	if state == nil {
+		return nil
+	}
+	network := metadata.Network
+	if network == "" {
+		network = N.NetworkTCP
+	}
+	uplink, downlink := m.historyCounters(metadata, state)
+	return &flowTracker{
+		state:           state,
+		tracked:         m.newTrackedConn(state, network, metadata, matchedRule, matchOutbound),
+		historyUplink:   uplink,
+		historyDownlink: downlink,
+	}
+}
+
+type flowTracker struct {
+	state           *UserState
+	tracked         *trackedConn
+	historyUplink   *atomic.Int64
+	historyDownlink *atomic.Int64
+}
+
+// AttachFlow starts tracking the flow, as sing-box's own tracker does; the
+// handle closes it on request.
+func (t *flowTracker) AttachFlow(handle tun.FlowHandle) {
+	t.tracked.closer = func() error {
+		handle.CloseFlow()
+		return nil
+	}
+	t.tracked.store.join(t.tracked)
+}
+
+func (t *flowTracker) CountForward(n int) {
+	t.state.Uplink.Add(int64(n))
+	t.tracked.upload.Add(int64(n))
+	if t.historyUplink != nil {
+		t.historyUplink.Add(int64(n))
+	}
+}
+
+func (t *flowTracker) CountReverse(n int) {
+	t.state.Downlink.Add(int64(n))
+	t.tracked.download.Add(int64(n))
+	if t.historyDownlink != nil {
+		t.historyDownlink.Add(int64(n))
+	}
+}
+
+func (t *flowTracker) FlowEstablished() {}
+
+func (t *flowTracker) CloseFlow(reason tun.FlowCloseReason) {
+	t.tracked.leave()
+}
+
+func (m *Manager) Snapshot(inboundTag, userName string) (UserSnapshot, bool) {
+	state := m.userState(inboundTag, userName)
+	if state == nil {
+		return UserSnapshot{}, false
+	}
+	snapshot := state.snapshot()
+	snapshot.ActiveConnections = m.conns.activeCount(state.Key)
+	return snapshot, true
+}
+
+func (m *Manager) Snapshots() []UserSnapshot {
+	m.access.RLock()
+	keys := make([]UserKey, 0, len(m.users))
+	for k := range m.users {
+		keys = append(keys, k)
+	}
+	m.access.RUnlock()
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].InboundTag != keys[j].InboundTag {
+			return keys[i].InboundTag < keys[j].InboundTag
+		}
+		return keys[i].UserName < keys[j].UserName
+	})
+	snapshots := make([]UserSnapshot, 0, len(keys))
+	for _, k := range keys {
+		state := m.userState(k.InboundTag, k.UserName)
+		if state != nil {
+			snapshot := state.snapshot()
+			snapshot.ActiveConnections = m.conns.activeCount(state.Key)
+			snapshots = append(snapshots, snapshot)
+		}
+	}
+	return snapshots
+}
+
+func (m *Manager) Reset(inboundTag, userName string) bool {
+	state := m.userState(inboundTag, userName)
+	if state == nil {
+		return false
+	}
+	state.Uplink.Store(0)
+	state.Downlink.Store(0)
+	return true
+}
+
+func (m *Manager) userState(inboundTag, userName string) *UserState {
+	if inboundTag == "" || userName == "" {
+		return nil
+	}
+	m.access.RLock()
+	defer m.access.RUnlock()
+	return m.users[UserKey{InboundTag: inboundTag, UserName: userName}]
+}
+
+// trafficState resolves the UserState for a connection's inbound/user pair,
+// falling back to the inbound's aggregate quota (adapter.QuotaInboundUser)
+// when the inbound has no per-connection user identity. userState itself is
+// left untouched since other callers (the HTTP API, the portal's
+// already-authenticated-user lookups) pass a real, known user name and must
+// not silently fall back to the aggregate entry.
+func (m *Manager) trafficState(inboundTag, userName string) *UserState {
+	if userName == "" {
+		userName = adapter.QuotaInboundUser
+	}
+	return m.userState(inboundTag, userName)
+}
+
+func (m *Manager) checkUser(inboundTag, userName string) error {
+	state := m.trafficState(inboundTag, userName)
+	if state == nil || !state.blocked() {
+		return nil
+	}
+	return &R.RejectedError{Cause: E.New("user quota exceeded: ", inboundTag, "/", userName)}
+}
+
+func (s *UserState) snapshot() UserSnapshot {
+	uplink := s.Uplink.Load()
+	downlink := s.Downlink.Load()
+	used := uplink + downlink
+	remaining := s.QuotaBytes - used
+	if remaining < 0 {
+		remaining = 0
+	}
+	var expiry int64
+	if !s.ExpiresAt.IsZero() {
+		expiry = s.ExpiresAt.Unix()
+	}
+	var resetAt int64
+	if s.MonthlyQuota {
+		resetAt = nextMonthlyQuotaAt(s.StartDate, time.Unix(s.CycleStart.Load(), 0), time.Now()).Unix()
+	}
+	return UserSnapshot{
+		InboundTag:     s.Key.InboundTag,
+		UserName:       s.Key.UserName,
+		UplinkBytes:    uplink,
+		DownlinkBytes:  downlink,
+		UsedBytes:      used,
+		QuotaBytes:     s.QuotaBytes,
+		RemainingBytes: remaining,
+		Blocked:        used >= s.QuotaBytes,
+		ExpiresAt:      expiry,
+		ResetAt:        resetAt,
+	}
+}
+
+func (s *UserState) blocked() bool {
+	return s.Uplink.Load()+s.Downlink.Load() >= s.QuotaBytes
+}

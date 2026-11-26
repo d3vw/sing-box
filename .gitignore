@@ -18,6 +18,8 @@
 .DS_Store
 /config.d/
 /venv/
+/lib/
 CLAUDE.md
 AGENTS.md
 /.claude/
+/.worktrees/

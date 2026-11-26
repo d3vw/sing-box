@@ -78,8 +78,8 @@ func (l *Listener) ListenTCP() (net.Listener, error) {
 		return nil, err
 	}
 	l.logger.Info("tcp server started at ", tcpListener.Addr())
-	l.tcpListener = tcpListener
-	return tcpListener, err
+	l.tcpListener = &trackingListener{Listener: tcpListener, owner: l}
+	return l.tcpListener, err
 }
 
 func (l *Listener) loopTCPIn() {

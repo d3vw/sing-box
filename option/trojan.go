@@ -1,5 +1,7 @@
 package option
 
+import "github.com/sagernet/sing/common/byteformats"
+
 type TrojanInboundOptions struct {
 	ListenOptions
 	Users []TrojanUser `json:"users,omitempty"`
@@ -11,8 +13,11 @@ type TrojanInboundOptions struct {
 }
 
 type TrojanUser struct {
-	Name     string `json:"name"`
-	Password string `json:"password"`
+	Name       string                   `json:"name"`
+	Password   string                   `json:"password"`
+	QuotaBytes *byteformats.MemoryBytes `json:"quota_bytes,omitempty"`
+	Admin      bool                     `json:"admin,omitempty"`
+	QuotaValidity
 }
 
 type TrojanOutboundOptions struct {

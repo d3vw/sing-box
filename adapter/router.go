@@ -30,6 +30,17 @@ type Router interface {
 	ResetNetwork()
 }
 
+// OutboundOverride may replace the outbound the route rules picked for a
+// connection; it returns the outbound to use, the same one to keep it.
+type OutboundOverride interface {
+	OverrideOutbound(metadata *InboundContext, outbound Outbound) Outbound
+}
+
+// OutboundOverrideRouter is a Router that accepts outbound overrides.
+type OutboundOverrideRouter interface {
+	AppendOutboundOverride(override OutboundOverride)
+}
+
 type PreMatchAction uint8
 
 const (
@@ -99,6 +110,11 @@ func JudgeFlow(router Router, metadata InboundContext, network uint8, source net
 	default:
 		return tun.FlowVerdict{Action: tun.ActionAccept}
 	}
+}
+
+type ConnectionInspector interface {
+	CheckConnection(ctx context.Context, metadata InboundContext) error
+	CheckPacketConnection(ctx context.Context, metadata InboundContext) error
 }
 
 type ConnectionTracker interface {

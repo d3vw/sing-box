@@ -4,7 +4,7 @@ TAGS ?= $(shell cat release/DEFAULT_BUILD_TAGS_OTHERS)
 
 GOHOSTOS = $(shell go env GOHOSTOS)
 GOHOSTARCH = $(shell go env GOHOSTARCH)
-VERSION=$(shell CGO_ENABLED=0 GOOS=$(GOHOSTOS) GOARCH=$(GOHOSTARCH) go run github.com/sagernet/sing-box/cmd/internal/read_tag@latest)
+VERSION ?=$(shell CGO_ENABLED=0 GOOS=$(GOHOSTOS) GOARCH=$(GOHOSTARCH) go run github.com/sagernet/sing-box/cmd/internal/read_tag@latest)
 
 LDFLAGS_SHARED = $(shell cat release/LDFLAGS)
 PARAMS = -v -trimpath -ldflags "-X 'github.com/sagernet/sing-box/constant.Version=$(VERSION)' $(LDFLAGS_SHARED) -s -w -buildid="
@@ -14,11 +14,16 @@ PREFIX ?= $(shell go env GOPATH)
 SING_FFI ?= sing-ffi
 LIBBOX_FFI_CONFIG ?= ./experimental/libbox/ffi.json
 
-.PHONY: test release docs build schema
+.PHONY: test release docs build schema quota_portal
 
 build:
 	export GOTOOLCHAIN=local && \
 	go build $(MAIN_PARAMS) $(MAIN)
+
+# The quota dashboard (service/quota/web) is built into service/quota/ui,
+# which is committed so building sing-box needs no Node.js.
+quota_portal:
+	cd service/quota/web && npm ci && npm run check && npm run build
 
 race:
 	export GOTOOLCHAIN=local && \
@@ -282,6 +287,12 @@ publish_docs:
 docs_install:
 	python3 -m venv venv
 	source ./venv/bin/activate && pip install --force-reinstall mkdocs-material=="9.7.2" mkdocs-static-i18n=="1.2.*"
+
+DASHBOARD_SRC ?= /home/grey/GitHub/sing-box-dashboard/dist
+
+sync-dashboard-ui:
+	rm -rf service/dashboard_ui/dist
+	cp -r $(DASHBOARD_SRC) service/dashboard_ui/dist
 
 clean:
 	rm -rf bin dist sing-box

@@ -1,0 +1,33 @@
+name: Build Custom Linux AMD64
+
+on:
+  push:
+    branches:
+      - custom
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build linux/amd64
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ~1.25.9
+
+      - name: Build binary
+        run: |
+          TAGS=$(tr ',' '\n' < release/DEFAULT_BUILD_TAGS_OTHERS | grep -v -E '^(badlinkname|tfogo_checklinkname0|with_naive_outbound)$' | paste -sd, -)
+          go build -mod=mod -tags "${TAGS}" -ldflags "-X github.com/sagernet/sing-box/constant.Version=v1.14.0-custom-${GITHUB_SHA::9}" -o sing-box-linux-amd64 ./cmd/sing-box
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sing-box-linux-amd64
+          path: sing-box-linux-amd64

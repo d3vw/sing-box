@@ -35,6 +35,10 @@ get_build_tags() {
 }
 
 get_version() {
+    if [ -n "$VERSION" ]; then
+        echo "$VERSION"
+        return
+    fi
     cd "$PROJECT_DIR"
     GOHOSTOS=$(go env GOHOSTOS)
     GOHOSTARCH=$(go env GOHOSTARCH)

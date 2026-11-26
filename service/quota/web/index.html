@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>流量配额</title>
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#e3e5e1">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f1112">
+<meta name="description" content="节点流量配额与自定义出站">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="preload" href="/fonts/archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
+<!-- Chinese text uses Noto Sans SC from Google Fonts, which serves it in slices so a page loads only the characters it shows; without it the system fonts take over. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap">
+<!-- Before the first paint: theme, language, the tab in the address and the entry animation. -->
+<script>try{var t=localStorage.getItem("quota-theme");if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";var r=document.documentElement;r.dataset.theme=t;if(location.hash==="#connections")r.classList.add("on-cx");else if(location.hash==="#outbound")r.classList.add("on-ob");if(localStorage.getItem("quota-language")==="en")r.lang="en";r.classList.add("intro")}catch(e){}</script>
+</head>
+<body>
+<!-- The portal replaces the placeholder with the page data (portal_page.go). -->
+<script type="application/json" id="qd">"__QUOTA_PAGE_DATA__"</script>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -46,6 +46,8 @@ type Router struct {
 	neighborResolver  adapter.NeighborResolver
 	pauseManager      pause.Manager
 	trackers          []adapter.ConnectionTracker
+	overrides         []adapter.OutboundOverride
+	inspectors        []adapter.ConnectionInspector
 	platformInterface adapter.PlatformInterface
 }
 
@@ -236,8 +238,25 @@ func (r *Router) Rules() []adapter.Rule {
 	return r.rules
 }
 
+func (r *Router) AppendOutboundOverride(override adapter.OutboundOverride) {
+	r.overrides = append(r.overrides, override)
+}
+
+func (r *Router) overrideOutbound(metadata *adapter.InboundContext, outbound adapter.Outbound) adapter.Outbound {
+	if outbound == nil {
+		return nil
+	}
+	for _, override := range r.overrides {
+		outbound = override.OverrideOutbound(metadata, outbound)
+	}
+	return outbound
+}
+
 func (r *Router) AppendTracker(tracker adapter.ConnectionTracker) {
 	r.trackers = append(r.trackers, tracker)
+	if inspector, isInspector := tracker.(adapter.ConnectionInspector); isInspector {
+		r.inspectors = append(r.inspectors, inspector)
+	}
 }
 
 func (r *Router) NeedFindProcess() bool {

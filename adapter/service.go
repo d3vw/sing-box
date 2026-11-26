@@ -24,3 +24,8 @@ type ServiceManager interface {
 	Get(tag string) (Service, bool)
 	Create(ctx context.Context, logger log.ContextLogger, tag string, serviceType string, options any) error
 }
+
+// APIURLProvider is implemented by services that expose an HTTP API endpoint.
+type APIURLProvider interface {
+	APIURL() string
+}

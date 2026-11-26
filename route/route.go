@@ -89,6 +89,12 @@ func (r *Router) routeConnection(ctx context.Context, conn net.Conn, metadata ad
 		return nil
 	}
 	metadata.Network = N.NetworkTCP
+	for _, inspector := range r.inspectors {
+		err := inspector.CheckConnection(ctx, metadata)
+		if err != nil {
+			return err
+		}
+	}
 	switch metadata.Destination.Fqdn {
 	case mux.Destination.Fqdn:
 		return E.New("global multiplex is deprecated since sing-box v1.7.0, enable multiplex in Inbound fields instead.")
@@ -147,6 +153,7 @@ func (r *Router) routeConnection(ctx context.Context, conn net.Conn, metadata ad
 	if selectedRule == nil {
 		selectedOutbound = r.outbound.Default()
 	}
+	selectedOutbound = r.overrideOutbound(&metadata, selectedOutbound)
 	chain, err := resolveOutbound(selectedOutbound, N.NetworkTCP)
 	if err != nil {
 		buf.ReleaseMulti(buffers)
@@ -266,6 +273,12 @@ func (r *Router) routePacketConnection(ctx context.Context, conn N.PacketConn, m
 	}
 	// TODO: move to UoT
 	metadata.Network = N.NetworkUDP
+	for _, inspector := range r.inspectors {
+		err := inspector.CheckPacketConnection(ctx, metadata)
+		if err != nil {
+			return err
+		}
+	}
 
 	// Currently we don't have deadline usages for UDP connections
 	/*if deadline.NeedAdditionalReadDeadline(conn) {
@@ -312,6 +325,7 @@ func (r *Router) routePacketConnection(ctx context.Context, conn N.PacketConn, m
 	if selectedRule == nil || selectReturn {
 		selectedOutbound = r.outbound.Default()
 	}
+	selectedOutbound = r.overrideOutbound(&metadata, selectedOutbound)
 	chain, err := resolveOutbound(selectedOutbound, N.NetworkUDP)
 	if err != nil {
 		N.ReleaseMultiPacketBuffer(packetBuffers)
